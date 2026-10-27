@@ -136,3 +136,53 @@ def test_oversize_rejected(client):
 def test_fake_zip_rejected(client):
     res = client.post("/api/v1/uploads", files={"file": ("x.zip", b"not-a-zip", "application/zip")})
     assert res.status_code == 400
+
+
+# ---------------------------------------------------------------- review 补充用例
+
+def test_structure_optional(client):
+    """不传 structure 时不应 500，四个占比列存 NULL。"""
+    res = client.post("/api/v1/applications", json=_payload(structure=None))
+    assert res.status_code == 201, res.text
+
+    from app import db
+
+    with db.get_conn() as conn:
+        row = conn.execute(
+            "SELECT pct_secondhand, pct_new_stock FROM application WHERE id = ?",
+            (res.json()["id"],),
+        ).fetchone()
+    assert row["pct_secondhand"] is None and row["pct_new_stock"] is None
+
+
+def test_consent_must_be_explicit(client):
+    no_field = _payload()
+    no_field.pop("consent")
+    assert client.post("/api/v1/applications", json=no_field).status_code == 422
+
+    assert client.post("/api/v1/applications", json=_payload(consent=False)).status_code == 422
+
+
+def test_upload_kind_whitelist(client):
+    res = client.post(
+        "/api/v1/uploads",
+        files={"file": ("a.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+        data={"kind": "随便写"},
+    )
+    assert res.status_code == 400
+
+
+def test_zones_deduped(client):
+    res = client.post("/api/v1/applications", json=_payload(zones=["A", "A", "C"]))
+    assert res.status_code == 201
+    from app import db
+
+    with db.get_conn() as conn:
+        stored = conn.execute(
+            "SELECT zones FROM application WHERE id = ?", (res.json()["id"],)
+        ).fetchone()["zones"]
+    assert stored == '["A", "C"]'
+
+
+def test_healthz_checks_db(client):
+    assert client.get("/healthz").json() == {"ok": True}

@@ -87,8 +87,13 @@ class ApplicationIn(BaseModel):
 
     # 附件与合规
     file_ids: list[str] = Field(default_factory=list, max_length=20, description="先上传拿到的 file_id")
-    consent: bool = Field(True, description="同意资料用于本次活动审核")
+    consent: bool = Field(..., description="同意资料用于本次活动审核（必须显式为 true）")
     source: str | None = Field(None, max_length=30, description="h5 / qrcode / word")
+
+    @field_validator("zones")
+    @classmethod
+    def _dedupe_zones(cls, v: list[str]) -> list[str]:
+        return list(dict.fromkeys(v))
 
     @field_validator("phone")
     @classmethod
@@ -128,7 +133,7 @@ class ApplicationIn(BaseModel):
         return self
 
     def to_row(self, privacy_version: str, consent_at: str) -> dict[str, Any]:
-        s = self.structure or StructureIn()
+        s = self.structure
         return {
             "created_at": consent_at,
             "brand_name": self.brand_name,
@@ -144,10 +149,10 @@ class ApplicationIn(BaseModel):
             "expected_qty": self.expected_qty,
             "price_min": self.price_min,
             "price_max": self.price_max,
-            "pct_secondhand": s.secondhand,
-            "pct_new_stock": s.new_stock,
-            "pct_sample": s.sample,
-            "pct_replica": s.replica,
+            "pct_secondhand": s.secondhand if s else None,
+            "pct_new_stock": s.new_stock if s else None,
+            "pct_sample": s.sample if s else None,
+            "pct_replica": s.replica if s else None,
             "items_json": json.dumps([i.model_dump() for i in self.items], ensure_ascii=False),
             "consent_at": consent_at,
             "privacy_version": privacy_version,

@@ -89,6 +89,29 @@ def bind_files(application_id: int, file_ids: list[str]) -> int:
         return cur.rowcount
 
 
+def delete_application(application_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM application WHERE id = ?", (application_id,))
+
+
+def delete_file(file_id: str) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM file WHERE id = ?", (file_id,))
+
+
+def orphan_files(older_than: str) -> list[sqlite3.Row]:
+    with get_conn() as conn:
+        return conn.execute(
+            "SELECT * FROM file WHERE application_id IS NULL AND created_at < ?",
+            (older_than,),
+        ).fetchall()
+
+
+def ping() -> None:
+    with get_conn() as conn:
+        conn.execute("SELECT 1").fetchone()
+
+
 def set_file_path(file_id: str, stored_path: str) -> None:
     with get_conn() as conn:
         conn.execute("UPDATE file SET stored_path = ? WHERE id = ?", (stored_path, file_id))

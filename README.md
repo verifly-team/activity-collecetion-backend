@@ -128,7 +128,7 @@ curl -X POST localhost:8000/api/v1/uploads \
 
 ```bash
 # 报名明细（Excel 直接打开；items_json 里是代表商品清单）
-docker compose exec signup python - <<'PY' > 报名.csv
+docker compose exec -T signup python - <<'PY' > 报名.csv
 import sqlite3, csv, sys
 c = sqlite3.connect("/data/app.db"); c.row_factory = sqlite3.Row
 w = csv.writer(sys.stdout)
@@ -145,11 +145,30 @@ PY
 tar -czf uploads.tar.gz data/uploads/
 ```
 
+清理「传了附件但没提交」的孤儿文件（建议加进 crontab，每天跑一次）：
+
+```bash
+docker compose exec -T signup python -m app.cleanup --hours 24 --dry-run   # 先看
+docker compose exec -T signup python -m app.cleanup --hours 24             # 再删
+```
+
 备份数据库：`docker compose exec signup python -c "import sqlite3;sqlite3.connect('/data/app.db').execute(\"VACUUM INTO '/data/app.db.bak'\")"`，或直接复制 `data/app.db`（先停容器最稳）。
 
 ---
 
-## 5. 配置
+## 5. 常见问题
+
+**Linux 上启动报 `unable to open database file`**：`./data` 目录是 Docker 用 root 建的，容器里跑的是 uid 10001。先建好目录并给权限：
+
+```bash
+mkdir -p data/uploads && sudo chown -R 10001:10001 data
+```
+
+**为什么 `--workers 1`**：SQLite 单写者，多 worker 只会互相等锁。这台机器的量级（几百份报名）单进程绰绰有余。
+
+**限流按 IP 算**：如果前面挂了 Nginx / 负载均衡，记得透传 `X-Forwarded-For`，否则所有人共用网关 IP 会一起被限。
+
+## 6. 配置
 
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
@@ -165,7 +184,7 @@ tar -czf uploads.tar.gz data/uploads/
 
 ---
 
-## 6. 前端怎么接
+## 7. 前端怎么接
 
 ```ts
 // 1) 选完文件立刻上传，拿到 file_id
@@ -190,16 +209,17 @@ server: { proxy: { '/api': 'http://localhost:8000' } }
 
 ---
 
-## 7. 开发与测试
+## 8. 开发与测试
 
 ```bash
 pip install -r requirements-dev.txt
-pytest -q          # 8 个用例：正常提交、手机号规范化、结构合计、附件复用、超限、伪 zip
+pytest -q          # 13 个用例：提交、手机号规范化、结构合计、consent 必传、附件复用、超限、伪 zip、孤儿附件
 ```
 
 ```
 app/
 ├── main.py        # 两个接口 + 限流 + 健康检查
+├── cleanup.py     # 孤儿附件清理
 ├── models.py      # Pydantic 校验（Chinese 报错信息）
 ├── db.py          # sqlite3 数据层
 ├── config.py      # 环境变量
