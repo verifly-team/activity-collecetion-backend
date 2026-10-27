@@ -1,0 +1,37 @@
+{
+  "brand_name": "拾光中古",
+  "contact_name": "陈小姐",
+  "phone": "13800138000",
+  "wechat": "shiguang_vtg",
+  "city": "深圳",
+  "entity_type": "company",
+  "is_first_time": false,
+  "categories": ["bag", "apparel"],
+  "zones": ["A", "C"],
+  "expected_qty": 180,
+  "price_min": 800,
+  "price_max": 28000,
+  "structure": {
+    "secondhand": 60,
+    "new_stock": 30,
+    "sample": 10,
+    "replica": 0
+  },
+  "items": [
+    {
+      "name": "Hermès Birkin 30 金棕",
+      "era_series": "2015 年 / Birkin",
+      "condition_source": "二手 / 附购买凭证",
+      "price": 52000
+    },
+    {
+      "name": "Levi's 70505 大 E 夹克",
+      "era_series": "70 年代 / Big E",
+      "condition_source": "二手 / 有使用痕迹",
+      "price": 8800
+    }
+  ],
+  "file_ids": [],
+  "consent": true,
+  "source": "h5"
+}

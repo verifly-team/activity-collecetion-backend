@@ -1,0 +1,19 @@
+services:
+  signup:
+    build: .
+    image: verifly-signup:1.0.0
+    container_name: verifly-signup
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_PATH: /data/app.db
+      UPLOAD_DIR: /data/uploads
+      MAX_FILE_MB: "20"
+      MAX_FILES: "10"
+      MAX_TOTAL_MB: "100"
+      ALLOWED_ORIGINS: "*"
+      PRIVACY_VERSION: "v1.0"
+      RATE_LIMIT_PER_MINUTE: "20"
+    volumes:
+      - ./data:/data
