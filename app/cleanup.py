@@ -1,12 +1,13 @@
 """清理「传了附件但没提交表单」的孤儿文件。
 
-    python -m app.cleanup --hours 24           # 真删
-    python -m app.cleanup --hours 24 --dry-run # 只看不删
+python -m app.cleanup --hours 24           # 真删
+python -m app.cleanup --hours 24 --dry-run # 只看不删
 """
+
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from . import db
 from .config import settings
@@ -20,7 +21,7 @@ def main() -> None:
 
     db.init_db()
     cutoff = (
-        (datetime.now(timezone.utc) - timedelta(hours=args.hours))
+        (datetime.now(UTC) - timedelta(hours=args.hours))
         .replace(microsecond=0)
         .isoformat()
         .replace("+00:00", "Z")

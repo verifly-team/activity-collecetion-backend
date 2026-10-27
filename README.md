@@ -4,6 +4,9 @@
 
 一个容器、两张表、两个接口。收到数据直接进 SQLite，附件落到磁盘目录，运营需要时直接开库导出。
 
+📖 **完整接口文档：[`docs/API.md`](docs/API.md)**（字段含义、错误码、枚举字典、接入示例都在里面）
+🚀 在线交互版：服务起来后访问 `/docs`（Swagger UI）
+
 ---
 
 ## 1. 跑起来
@@ -52,6 +55,8 @@ curl -X POST localhost:8000/api/v1/uploads \
   -F "file=@samples/photos.zip" -F "kind=photos"
 # {"file_id":"3f2a…","original_name":"photos.zip","size":311,"kind":"photos"}
 ```
+
+所有错误统一返回 `{"ok": false, "error": {"code", "message", "fields"}}`，`fields` 精确到字段路径。错误码表见 [docs/API.md](docs/API.md#23-错误码表)。
 
 ### 2.2 `POST /api/v1/applications` —— 再提交表单
 
@@ -213,7 +218,7 @@ server: { proxy: { '/api': 'http://localhost:8000' } }
 
 ```bash
 pip install -r requirements-dev.txt
-pytest -q          # 13 个用例：提交、手机号规范化、结构合计、consent 必传、附件复用、超限、伪 zip、孤儿附件
+pytest -q          # 14 个用例：提交、手机号规范化、结构合计、consent 必传、附件复用、超限、伪 zip、限流、孤儿附件
 ```
 
 ```

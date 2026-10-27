@@ -9,7 +9,7 @@ os.environ.setdefault("DATABASE_PATH", "/tmp/vf_test/app.db")
 os.environ.setdefault("UPLOAD_DIR", "/tmp/vf_test/uploads")
 os.environ.setdefault("MAX_FILE_MB", "1")
 
-from app.main import app  # noqa: E402
+from app.main import app
 
 
 @pytest.fixture(scope="module")
@@ -140,6 +140,7 @@ def test_fake_zip_rejected(client):
 
 # ---------------------------------------------------------------- review 补充用例
 
+
 def test_structure_optional(client):
     """不传 structure 时不应 500，四个占比列存 NULL。"""
     res = client.post("/api/v1/applications", json=_payload(structure=None))
@@ -186,3 +187,18 @@ def test_zones_deduped(client):
 
 def test_healthz_checks_db(client):
     assert client.get("/healthz").json() == {"ok": True}
+
+
+def test_rate_limit(client, monkeypatch):
+    from app import config, main
+
+    monkeypatch.setattr(config.settings, "rate_limit_per_minute", 2)
+    main._hits.clear()
+
+    codes = [client.post("/api/v1/applications", json=_payload()).status_code for _ in range(3)]
+    assert codes == [201, 201, 429], codes
+
+    body = client.post("/api/v1/applications", json=_payload()).json()
+    assert body["error"]["code"] == "RATE_LIMITED"
+
+    main._hits.clear()

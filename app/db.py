@@ -1,9 +1,10 @@
 """SQLite 数据层 —— 只用标准库，不引 ORM。"""
+
 from __future__ import annotations
 
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import settings
@@ -12,7 +13,7 @@ SCHEMA_FILE = Path(__file__).with_name("schema.sql")
 
 
 def utcnow() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def connect() -> sqlite3.Connection:
@@ -61,7 +62,8 @@ def create_file(
 ) -> None:
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO file (id, original_name, stored_path, mime, size, sha256, kind, created_at) "
+            "INSERT INTO file "
+            "(id, original_name, stored_path, mime, size, sha256, kind, created_at) "
             "VALUES (?,?,?,?,?,?,?,?)",
             (file_id, original_name, stored_path, mime, size, sha256, kind, utcnow()),
         )

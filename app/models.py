@@ -1,4 +1,5 @@
 """请求 / 响应模型 + 校验。"""
+
 from __future__ import annotations
 
 import json
@@ -52,7 +53,7 @@ class StructureIn(BaseModel):
     replica: int = Field(0, ge=0, le=100, description="复刻／原创 %")
 
     @model_validator(mode="after")
-    def _sum(self) -> "StructureIn":
+    def _sum(self) -> StructureIn:
         total = self.secondhand + self.new_stock + self.sample + self.replica
         if total != 100:
             raise ValueError(f"商品结构四项合计须为 100%，当前 {total}%")
@@ -60,7 +61,43 @@ class StructureIn(BaseModel):
 
 
 class ApplicationIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "example": {
+                "brand_name": "拾光中古",
+                "contact_name": "陈小姐",
+                "phone": "13800138000",
+                "wechat": "shiguang_vtg",
+                "email": None,
+                "city": "深圳",
+                "entity_type": "company",
+                "is_first_time": False,
+                "categories": ["bag", "apparel"],
+                "zones": ["A", "C"],
+                "expected_qty": 180,
+                "price_min": 800,
+                "price_max": 28000,
+                "structure": {
+                    "secondhand": 60,
+                    "new_stock": 30,
+                    "sample": 10,
+                    "replica": 0,
+                },
+                "items": [
+                    {
+                        "name": "Hermès Birkin 30 金棕",
+                        "era_series": "2015 年 / Birkin",
+                        "condition_source": "二手 / 附购买凭证",
+                        "price": 52000,
+                    }
+                ],
+                "file_ids": ["3f2a1c9b0d4e4f7a8b6c5d4e3f2a1b0c"],
+                "consent": True,
+                "source": "h5",
+            }
+        },
+    )
 
     # 品牌与联络
     brand_name: str = Field(min_length=1, max_length=120, description="品牌／店铺名称")
@@ -86,7 +123,9 @@ class ApplicationIn(BaseModel):
     items: list[ItemIn] = Field(default_factory=list, max_length=20, description="代表商品 3~5 件")
 
     # 附件与合规
-    file_ids: list[str] = Field(default_factory=list, max_length=20, description="先上传拿到的 file_id")
+    file_ids: list[str] = Field(
+        default_factory=list, max_length=20, description="先上传拿到的 file_id"
+    )
     consent: bool = Field(..., description="同意资料用于本次活动审核（必须显式为 true）")
     source: str | None = Field(None, max_length=30, description="h5 / qrcode / word")
 
@@ -119,7 +158,7 @@ class ApplicationIn(BaseModel):
         return v or None
 
     @model_validator(mode="after")
-    def _checks(self) -> "ApplicationIn":
+    def _checks(self) -> ApplicationIn:
         if not self.email and not self.wechat:
             raise ValueError("微信与邮箱至少填写一项")
         if not self.consent:

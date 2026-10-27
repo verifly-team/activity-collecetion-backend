@@ -1,4 +1,10 @@
-"""66th 商家参展申请 —— 采集服务（2 个接口，够用就好）。"""
+"""66th 商家参展申请 —— 采集服务。
+
+两个业务接口：
+    POST /api/v1/uploads       上传附件，拿 file_id
+    POST /api/v1/applications  提交报名，带上 file_ids
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -14,9 +20,46 @@ from fastapi.staticfiles import StaticFiles
 
 from . import db
 from .config import settings
+from .errors import install_error_handlers
 from .models import ApplicationIn, SubmitResult, UploadResult
 
 ALLOWED_KINDS = {"photos", "list", "other"}
+_EXT_TEXT = " / ".join(sorted(settings.allowed_ext))
+
+DESCRIPTION = f"""
+66th & 2nd Vintage Fashion Show & Market（深圳）—— **商家参展申请采集服务**。
+
+一个容器、两张表、两个接口。数据进 SQLite，附件落磁盘，运营直接开库导出。
+
+### 提交流程
+
+1. `POST /api/v1/uploads` 逐个上传附件 → 拿到 `file_id`
+2. `POST /api/v1/applications` 提交表单，把 `file_ids` 一起带上
+
+### 附件限制
+
+- 单文件 ≤ **{settings.max_file_mb}MB**
+- 每份报名 ≤ **{settings.max_files}** 个，合计 ≤ **{settings.max_total_mb}MB**
+- 允许类型：{_EXT_TEXT}
+- zip 只校验文件头，**不解压**
+
+### 错误格式
+
+所有错误统一返回：
+
+```json
+{{"ok": false, "error": {{"code": "VALIDATION_ERROR", "message": "表单校验未通过",
+  "fields": [{{"path": "phone", "message": "请填写有效的 11 位手机号"}}]}}}}
+```
+
+完整文档见仓库 `docs/API.md`。
+"""
+
+TAGS_METADATA = [
+    {"name": "附件", "description": "上传图片 / PDF / zip，返回 file_id 供提交时引用。"},
+    {"name": "报名", "description": "提交商家参展申请表单。"},
+    {"name": "系统", "description": "健康检查与首页。"},
+]
 
 
 @asynccontextmanager
@@ -28,8 +71,14 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     lifespan=lifespan,
     title="66th 商家参展申请采集服务",
-    version="1.0.0",
-    description="两个接口：先传附件拿 file_id，再提交表单。",
+    version="1.1.0",
+    description=DESCRIPTION,
+    openapi_tags=TAGS_METADATA,
+    contact={
+        "name": "Verifly",
+        "url": "https://github.com/verifly-team/activity-collecetion-backend",
+    },
+    license_info={"name": "Proprietary"},
 )
 
 app.add_middleware(
@@ -38,6 +87,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+install_error_handlers(app)
 
 # ---------------------------------------------------------------- 限流（内存版）
 
@@ -69,25 +120,41 @@ def _rate_limit(request: Request) -> None:
             _hits.pop(k, None)
 
 
-# ---------------------------------------------------------------- 启动
+# ---------------------------------------------------------------- 系统
 
-@app.get("/healthz", tags=["系统"])
+
+@app.get("/healthz", tags=["系统"], summary="健康检查")
 def healthz() -> dict:
+    """容器 HEALTHCHECK 用；数据库连不上会返回 503。"""
     try:
         db.ping()
-    except Exception:  # noqa: BLE001 - 健康检查只关心能不能连上
-        raise HTTPException(status_code=503, detail="数据库不可用")
+    except Exception:  # 健康检查只关心能不能连上
+        raise HTTPException(status_code=503, detail="数据库不可用") from None
     return {"ok": True}
 
 
 # ---------------------------------------------------------------- 1. 上传附件
 
-@app.post("/api/v1/uploads", response_model=UploadResult, status_code=201, tags=["附件"])
+
+@app.post(
+    "/api/v1/uploads",
+    response_model=UploadResult,
+    status_code=201,
+    tags=["附件"],
+    summary="上传附件",
+    response_description="上传成功，返回 file_id",
+    responses={
+        400: {"description": "扩展名不支持 / 文件为空 / 不是有效 zip / kind 非法"},
+        413: {"description": "超过单文件大小上限"},
+        429: {"description": "请求过于频繁"},
+    },
+)
 async def upload_attachment(
     request: Request,
     file: UploadFile = File(..., description="图片 / PDF / zip 打包件"),
-    kind: str | None = Form(None, description="photos / list / other"),
+    kind: str | None = Form(None, description="photos 商品图 · list 商品清单 · other 其他"),
 ) -> UploadResult:
+    """把附件先存到暂存区，返回 `file_id`；提交表单时用 `file_ids` 引用。"""
     _rate_limit(request)
 
     if kind and kind not in ALLOWED_KINDS:
@@ -143,8 +210,30 @@ async def upload_attachment(
 
 # ---------------------------------------------------------------- 2. 提交报名
 
-@app.post("/api/v1/applications", response_model=SubmitResult, status_code=201, tags=["报名"])
+
+@app.post(
+    "/api/v1/applications",
+    response_model=SubmitResult,
+    status_code=201,
+    tags=["报名"],
+    summary="提交参展申请",
+    response_description="提交成功，返回报名 id",
+    responses={
+        400: {"description": "file_id 无效 / 已被使用 / 附件文件缺失"},
+        409: {"description": "附件被并发提交占用"},
+        413: {"description": "附件合计超过上限"},
+        422: {"description": "表单校验未通过，明细见 error.fields"},
+        429: {"description": "请求过于频繁"},
+    },
+)
 def submit_application(payload: ApplicationIn, request: Request) -> SubmitResult:
+    """提交一份完整的商家参展申请。
+
+    - 手机号自动去 `+86` / 空格 / 横线并校验
+    - 微信与邮箱至少填一项
+    - 商品结构四项若填写则合计必须 100
+    - `consent` 必须显式为 `true`
+    """
     _rate_limit(request)
 
     file_ids = list(dict.fromkeys(payload.file_ids))  # 去重保序
@@ -157,7 +246,7 @@ def submit_application(payload: ApplicationIn, request: Request) -> SubmitResult
     if total > settings.max_total_bytes:
         raise HTTPException(status_code=413, detail=f"附件合计不能超过 {settings.max_total_mb}MB")
 
-    # 文件必须真在磁盘上（防止库里残留脏记录）
+    # 文件必须真在磁盘上，防止库里残留脏记录
     for r in rows:
         if not (settings.upload_path / r["stored_path"]).exists():
             raise HTTPException(status_code=400, detail="附件文件缺失，请重新上传")
@@ -187,19 +276,20 @@ def submit_application(payload: ApplicationIn, request: Request) -> SubmitResult
     return SubmitResult(id=app_id, files=len(rows), created_at=created_at)
 
 
-# ---------------------------------------------------------------- 静态站（有就挂，没有不影响）
+# ---------------------------------------------------------------- 静态站（有就挂）
 
 if settings.static_path.is_dir() and (settings.static_path / "index.html").exists():
     app.mount("/", StaticFiles(directory=settings.static_path, html=True), name="static")
 else:
 
-    @app.get("/", tags=["系统"])
+    @app.get("/", tags=["系统"], summary="服务信息")
     def index() -> dict:
         return {
             "service": "66th 商家参展申请采集服务",
+            "version": app.version,
             "endpoints": {
                 "POST /api/v1/uploads": "上传附件，返回 file_id",
                 "POST /api/v1/applications": "提交报名（带 file_ids）",
-                "GET /docs": "接口文档",
+                "GET /docs": "接口文档（Swagger UI）",
             },
         }

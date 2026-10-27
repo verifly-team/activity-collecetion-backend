@@ -1,0 +1,31 @@
+[project]
+name = "activity-collection-backend"
+version = "1.1.0"
+description = "66th & 2nd 市集 —— 商家参展申请采集服务"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110,<1.0",
+    "uvicorn[standard]>=0.27,<1.0",
+    "pydantic>=2.6,<3.0",
+    "python-multipart>=0.0.9",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "B008",   # FastAPI 的 File()/Form() 默认参数是官方写法
+    "RUF001", # 全角标点是有意的：注释与报错信息都是中文
+    "RUF002",
+    "RUF003",
+    "RUF100",  # noqa 里带说明文字是有意的
+    "BLE001",  # 健康检查/兜底 handler 需要吞掉所有异常
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

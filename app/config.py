@@ -1,4 +1,5 @@
 """环境变量配置。"""
+
 from __future__ import annotations
 
 import os
@@ -20,9 +21,9 @@ class Settings:
         self.rate_limit_per_minute = int(os.getenv("RATE_LIMIT_PER_MINUTE", "20"))
 
         # 附件
-        self.max_file_mb = int(os.getenv("MAX_FILE_MB", "20"))       # 单文件
-        self.max_files = int(os.getenv("MAX_FILES", "10"))           # 每份报名
-        self.max_total_mb = int(os.getenv("MAX_TOTAL_MB", "100"))    # 每份报名合计
+        self.max_file_mb = int(os.getenv("MAX_FILE_MB", "20"))  # 单文件
+        self.max_files = int(os.getenv("MAX_FILES", "10"))  # 每份报名
+        self.max_total_mb = int(os.getenv("MAX_TOTAL_MB", "100"))  # 每份报名合计
         self.allowed_ext = {
             e.lower().lstrip(".")
             for e in _env_list("ALLOWED_EXT", "jpg,jpeg,png,webp,heic,pdf,zip")
