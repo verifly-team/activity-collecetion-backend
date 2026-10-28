@@ -172,7 +172,46 @@ docker compose exec -T signup python -m app.cleanup --hours 24             # 再
 
 ---
 
-## 5. 常见问题
+## 5. 打包与发布（阿里云私有仓库）
+
+镜像地址：
+
+```
+crpi-quxtxo1i28qk1e0c.cn-guangzhou.personal.cr.aliyuncs.com/arceus/activity-66-collection-backend
+```
+
+**构建并推送**（Mac 上开发时务必指定 `linux/amd64`，服务器基本都是 x86）：
+
+```bash
+docker login crpi-quxtxo1i28qk1e0c.cn-guangzhou.personal.cr.aliyuncs.com
+./deploy/build-push.sh 1.2.0        # 不传参数则用日期 tag
+```
+
+脚本等价于：
+
+```bash
+docker build --platform linux/amd64 \
+  -t $REG/arceus/activity-66-collection-backend:1.2.0 \
+  -t $REG/arceus/activity-66-collection-backend:latest .
+docker push $REG/arceus/activity-66-collection-backend:1.2.0
+docker push $REG/arceus/activity-66-collection-backend:latest
+```
+
+**服务器上启动**：
+
+```bash
+cp .env.example .env && vim .env       # 填 DATABASE_URL 等
+./deploy/run.sh .env
+```
+
+**更新**：
+
+```bash
+docker pull $REG/arceus/activity-66-collection-backend:latest
+docker rm -f verifly-signup && ./deploy/run.sh .env
+```
+
+## 6. 常见问题
 
 **启动报连不上数据库**：检查 `DATABASE_URL` 的库名、账号密码、以及 MySQL 是否允许该来源 IP（`GRANT ... TO 'verifly'@'%'`）。`/healthz` 会返回 503。
 
@@ -184,7 +223,7 @@ docker compose exec -T signup python -m app.cleanup --hours 24             # 再
 
 **限流按 IP 算**：如果前面挂了 Nginx / 负载均衡，记得透传 `X-Forwarded-For`，否则所有人共用网关 IP 会一起被限。
 
-## 6. 配置
+## 7. 配置
 
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
@@ -200,7 +239,7 @@ docker compose exec -T signup python -m app.cleanup --hours 24             # 再
 
 ---
 
-## 7. 前端怎么接
+## 8. 前端怎么接
 
 ```ts
 // 1) 选完文件立刻上传，拿到 file_id
@@ -225,7 +264,7 @@ server: { proxy: { '/api': 'http://localhost:8000' } }
 
 ---
 
-## 8. 开发与测试
+## 9. 开发与测试
 
 ```bash
 pip install -r requirements-dev.txt
