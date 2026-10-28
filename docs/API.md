@@ -1,6 +1,7 @@
 # API 文档 —— 商家参展申请采集服务
 
 > 版本 `1.2.0` ｜ 更新于 2026-10
+> 相关文档：[README](../README.md) · [数据库与存储](DATABASE.md) · [部署手册](../deploy/DEPLOY.md)
 > 在线交互版：启动服务后访问 **`/docs`**（Swagger UI）或 **`/openapi.json`**（原始 schema）
 
 ---
@@ -475,6 +476,9 @@ server: { proxy: { '/api': 'http://localhost:8000' } }
 生产同域部署（`static/index.html` 由本服务托管）时无需 CORS。
 
 ---
+
+> 本节只讲「接口产出的数据落在哪」。表结构细节、文件生命周期、备份恢复见
+> **[数据库与存储](DATABASE.md)**。
 
 ## 7. 数据落地
 
