@@ -1,6 +1,6 @@
 # API 文档 —— 商家参展申请采集服务
 
-> 版本 `1.1.0` ｜ 更新于 2026-10
+> 版本 `1.2.0` ｜ 更新于 2026-10
 > 在线交互版：启动服务后访问 **`/docs`**（Swagger UI）或 **`/openapi.json`**（原始 schema）
 
 ---
@@ -478,52 +478,78 @@ server: { proxy: { '/api': 'http://localhost:8000' } }
 
 ## 7. 数据落地
 
-```
-data/
-├── app.db                  # SQLite，WAL 模式
-├── app.db-wal / app.db-shm
-└── uploads/
-    ├── 3f2a….zip           # 已上传未提交（孤儿）
-    └── 1/                  # 已提交，按报名 id 分目录
-        └── 3f2a….zip
-```
+### 7.1 数据库
 
-**导出报名明细**
+服务通过环境变量 **`DATABASE_URL`** 选择后端，两条路径共用同一套 SQL：
 
 ```bash
+# 线上：MySQL
+DATABASE_URL=mysql://verifly:密码@10.0.0.12:3306/verifly_signup?charset=utf8mb4
+
+# 本地：SQLite（不装 MySQL 也能跑）
+DATABASE_URL=sqlite:///data/app.db
+```
+
+| | MySQL（线上） | SQLite（本地/演示） |
+|---|---|---|
+| DDL | `app/schema_mysql.sql` | `app/schema_sqlite.sql` |
+| 建库 | `deploy/mysql-init.sql` 交 DBA 执行一次 | 自动创建文件 |
+| 字符集 | `utf8mb4 / utf8mb4_unicode_ci` | UTF-8 |
+| 表结构 | 首次启动自动 `CREATE TABLE IF NOT EXISTS` | 同左 |
+| 多 worker | 可以 | 只能 1 个（单写者） |
+
+表：`application`（报名主表）、`file`（附件），字段映射见 [5.2](#52-数据库表)。
+
+### 7.2 附件目录
+
+```
+data/uploads/
+├── 3f2a….zip          # 已上传、未提交（孤儿，会被 cleanup 清掉）
+└── 1/                 # 已提交，按报名 id 分目录
+    └── 3f2a….zip
+```
+
+### 7.3 导出报名明细
+
+```bash
+# MySQL
+mysql -h 10.0.0.12 -u verifly -p verifly_signup -e "
+SELECT id, created_at, brand_name, contact_name, phone, wechat, city,
+       categories, zones, expected_qty,
+       CONCAT(price_min,'~',price_max) AS price_range,
+       CONCAT('二手',pct_secondhand,'% 未使用',pct_new_stock,'% 样衣',pct_sample,'% 复刻',pct_replica,'%') AS structure,
+       items_json
+FROM application ORDER BY id" > 报名.tsv
+```
+
+```bash
+# SQLite
 docker compose exec -T signup python - <<'PY' > 报名.csv
 import sqlite3, csv, sys
 c = sqlite3.connect("/data/app.db"); c.row_factory = sqlite3.Row
 w = csv.writer(sys.stdout)
 w.writerow(["id","时间","品牌","联系人","手机","微信","城市","品类","区域",
-            "带货件数","价格区间","商品结构","代表商品"])
+            "带货件数","价格区间","代表商品"])
 for r in c.execute("select * from application order by id"):
     w.writerow([r["id"], r["created_at"], r["brand_name"], r["contact_name"], r["phone"],
                 r["wechat"], r["city"], r["categories"], r["zones"], r["expected_qty"],
-                f'{r["price_min"]}~{r["price_max"]}',
-                f'二手{r["pct_secondhand"]}% 未使用{r["pct_new_stock"]}%',
-                r["items_json"]])
+                f'{r["price_min"]}~{r["price_max"]}', r["items_json"]])
 PY
 ```
 
-**打包附件**
+### 7.4 打包附件 / 清理孤儿
 
 ```bash
 tar -czf uploads.tar.gz data/uploads/
-```
 
-**清理孤儿附件**
-
-```bash
 docker compose exec -T signup python -m app.cleanup --hours 24 --dry-run
 docker compose exec -T signup python -m app.cleanup --hours 24
 ```
-
----
 
 ## 8. 变更记录
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| `1.2.0` | 2026-10 | 数据库支持 MySQL（`DATABASE_URL` 切换，本地仍可用 SQLite）；新增 `deploy/mysql-init.sql`；compose 内置 MySQL 服务 |
 | `1.1.0` | 2026-10 | 统一错误响应结构；`structure` 可空；`consent` 改为必传；附件绑定并发保护；`healthz` 检查数据库；新增孤儿附件清理脚本；补齐本文档 |
 | `1.0.0` | 2026-10 | 首版：两个接口、两张表、Docker 部署 |

@@ -2,7 +2,7 @@
 
 66th & 2nd Vintage Fashion Show & Market（深圳）—— **商家参展申请采集服务**。
 
-一个容器、两张表、两个接口。收到数据直接进 SQLite，附件落到磁盘目录，运营需要时直接开库导出。
+一个容器、两张表、两个接口。数据进 **MySQL**（本地开发可用 SQLite），附件落磁盘，运营需要时直接查库导出。
 
 📖 **完整接口文档：[`docs/API.md`](docs/API.md)**（字段含义、错误码、枚举字典、接入示例都在里面）
 🚀 在线交互版：服务起来后访问 `/docs`（Swagger UI）
@@ -13,26 +13,37 @@
 
 ```bash
 cp .env.example .env
-docker compose up -d --build
-curl localhost:8000/healthz          # {"ok":true}
-open http://localhost:8000/docs      # 自动生成的接口文档
+docker compose up -d --build          # 会同时起 mysql + 应用
+curl localhost:8000/healthz           # {"ok":true}
+open http://localhost:8000/docs       # 自动生成的接口文档
 ```
 
-数据都在 `./data`：
+数据分两处：
 
 ```
-data/
-├── app.db                 # SQLite（报名主表 + 附件表）
-└── uploads/
-    └── 1/                 # 按报名 id 分目录，运维直接打包捞走
-        └── 3f2a….zip
+MySQL  verifly_signup            # application / file 两张表
+./data/uploads/
+   └── 1/                        # 按报名 id 分目录，运维直接打包捞走
+       └── 3f2a….zip
 ```
 
-不带 Docker 本地跑：
+### 接生产 MySQL（不用 compose 自带的那台）
+
+把 `deploy/mysql-init.sql` 交给 DBA 执行（建库 + 建账号 + 授权），然后：
+
+```bash
+DATABASE_URL='mysql://verifly:密码@10.0.0.12:3306/verifly_signup?charset=utf8mb4' \
+UPLOAD_DIR=/data/uploads \
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+表结构在服务首次启动时自动创建（`app/schema_mysql.sql`）。
+
+### 不带 MySQL 本地跑
 
 ```bash
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+DATABASE_URL=sqlite:///data/app.db uvicorn app.main:app --reload --port 8000
 ```
 
 ---
@@ -163,13 +174,13 @@ docker compose exec -T signup python -m app.cleanup --hours 24             # 再
 
 ## 5. 常见问题
 
-**Linux 上启动报 `unable to open database file`**：`./data` 目录是 Docker 用 root 建的，容器里跑的是 uid 10001。先建好目录并给权限：
+**启动报连不上数据库**：检查 `DATABASE_URL` 的库名、账号密码、以及 MySQL 是否允许该来源 IP（`GRANT ... TO 'verifly'@'%'`）。`/healthz` 会返回 503。
 
-```bash
-mkdir -p data/uploads && sudo chown -R 10001:10001 data
-```
+**Linux 上附件目录写不进去**：`./data/uploads` 是 Docker 用 root 建的，容器里跑 uid 10001。先 `mkdir -p data/uploads && sudo chown -R 10001:10001 data`。
 
-**为什么 `--workers 1`**：SQLite 单写者，多 worker 只会互相等锁。这台机器的量级（几百份报名）单进程绰绰有余。
+**SQLite 模式下为什么 `--workers 1`**：SQLite 单写者。切到 MySQL 后可以加 `--workers`（默认仍留 1，几百份报表单进程足够）。
+
+**MySQL 连接池**：当前每个请求新建连接，没有池化。量级到几千 QPS 再换 SQLAlchemy 连接池，现在不是瓶颈。
 
 **限流按 IP 算**：如果前面挂了 Nginx / 负载均衡，记得透传 `X-Forwarded-For`，否则所有人共用网关 IP 会一起被限。
 
@@ -177,7 +188,7 @@ mkdir -p data/uploads && sudo chown -R 10001:10001 data
 
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
-| `DATABASE_PATH` | `/data/app.db` | SQLite 路径 |
+| `DATABASE_URL` | — | `mysql://user:pass@host:3306/db?charset=utf8mb4` 或 `sqlite:///data/app.db` |
 | `UPLOAD_DIR` | `/data/uploads` | 附件目录 |
 | `MAX_FILE_MB` | `20` | 单文件上限 |
 | `MAX_FILES` | `10` | 每份报名附件个数 |

@@ -5,7 +5,7 @@ import zipfile
 import pytest
 from fastapi.testclient import TestClient
 
-os.environ.setdefault("DATABASE_PATH", "/tmp/vf_test/app.db")
+os.environ.setdefault("DATABASE_URL", "sqlite:////tmp/vf_test/app.db")
 os.environ.setdefault("UPLOAD_DIR", "/tmp/vf_test/uploads")
 os.environ.setdefault("MAX_FILE_MB", "1")
 
@@ -15,11 +15,11 @@ from app.main import app
 @pytest.fixture(scope="module")
 def client(tmp_path_factory):
     base = tmp_path_factory.mktemp("vf")
-    os.environ["DATABASE_PATH"] = str(base / "app.db")
+    os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL", f"sqlite:///{base / 'app.db'}")
     os.environ["UPLOAD_DIR"] = str(base / "uploads")
     from app import config
 
-    config.settings.database_path = str(base / "app.db")
+    config.settings.database_url = os.environ["DATABASE_URL"]
     config.settings.upload_dir = str(base / "uploads")
     config.settings.max_file_mb = 1
     with TestClient(app) as c:
@@ -148,11 +148,10 @@ def test_structure_optional(client):
 
     from app import db
 
-    with db.get_conn() as conn:
-        row = conn.execute(
-            "SELECT pct_secondhand, pct_new_stock FROM application WHERE id = ?",
-            (res.json()["id"],),
-        ).fetchone()
+    row = db.fetch_one(
+        "SELECT pct_secondhand, pct_new_stock FROM application WHERE id = ?",
+        (res.json()["id"],),
+    )
     assert row["pct_secondhand"] is None and row["pct_new_stock"] is None
 
 
@@ -178,10 +177,9 @@ def test_zones_deduped(client):
     assert res.status_code == 201
     from app import db
 
-    with db.get_conn() as conn:
-        stored = conn.execute(
-            "SELECT zones FROM application WHERE id = ?", (res.json()["id"],)
-        ).fetchone()["zones"]
+    stored = db.fetch_one("SELECT zones FROM application WHERE id = ?", (res.json()["id"],))[
+        "zones"
+    ]
     assert stored == '["A", "C"]'
 
 

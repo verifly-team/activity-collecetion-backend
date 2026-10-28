@@ -1,13 +1,37 @@
 services:
+  db:
+    image: mysql:8.0
+    container_name: verifly-signup-db
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-verifly_signup}
+      MYSQL_USER: ${MYSQL_USER:-verifly}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-verifly}
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
   signup:
     build: .
-    image: verifly-signup:1.0.0
+    image: verifly-signup:1.2.0
     container_name: verifly-signup
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "8000:8000"
     environment:
-      DATABASE_PATH: /data/app.db
+      DATABASE_URL: mysql://${MYSQL_USER:-verifly}:${MYSQL_PASSWORD:-verifly}@db:3306/${MYSQL_DATABASE:-verifly_signup}?charset=utf8mb4
       UPLOAD_DIR: /data/uploads
       MAX_FILE_MB: "20"
       MAX_FILES: "10"
@@ -16,4 +40,4 @@ services:
       PRIVACY_VERSION: "v1.0"
       RATE_LIMIT_PER_MINUTE: "20"
     volumes:
-      - ./data:/data
+      - ./data/uploads:/data/uploads

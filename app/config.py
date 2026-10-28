@@ -13,7 +13,11 @@ def _env_list(name: str, default: str = "") -> list[str]:
 
 class Settings:
     def __init__(self) -> None:
-        self.database_path = os.getenv("DATABASE_PATH", "data/app.db")
+        # 数据库：mysql://user:pass@host:3306/db?charset=utf8mb4 或 sqlite:///data/app.db
+        # 兼容旧的 DATABASE_PATH（等价于 sqlite:///<path>）
+        self.database_url = os.getenv("DATABASE_URL") or "sqlite:///" + os.getenv(
+            "DATABASE_PATH", "data/app.db"
+        )
         self.upload_dir = os.getenv("UPLOAD_DIR", "data/uploads")
         self.static_dir = os.getenv("STATIC_DIR", "static")
 

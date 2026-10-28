@@ -71,7 +71,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     lifespan=lifespan,
     title="66th 商家参展申请采集服务",
-    version="1.1.0",
+    version="1.2.0",
     description=DESCRIPTION,
     openapi_tags=TAGS_METADATA,
     contact={
