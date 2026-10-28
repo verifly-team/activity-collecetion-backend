@@ -174,6 +174,8 @@ docker compose exec -T signup python -m app.cleanup --hours 24             # 再
 
 ## 5. 打包与发布（阿里云私有仓库）
 
+> 一步步的人肉操作清单见 **[`deploy/DEPLOY.md`](deploy/DEPLOY.md)**（建库 → 推镜像 → 起容器 → 验收 → 回滚）
+
 镜像地址：
 
 ```
