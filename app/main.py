@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import time
 import uuid
 from collections import defaultdict, deque
@@ -68,11 +69,16 @@ async def lifespan(_: FastAPI):
     yield
 
 
+_ENABLE_DOCS = os.getenv("ENABLE_DOCS", "0").lower() in ("1", "true", "yes")
+
 app = FastAPI(
     lifespan=lifespan,
     title="66th 商家参展申请采集服务",
-    version="1.2.0",
+    version="1.3.0",
     description=DESCRIPTION,
+    docs_url="/docs" if _ENABLE_DOCS else None,
+    redoc_url="/redoc" if _ENABLE_DOCS else None,
+    openapi_url="/openapi.json" if _ENABLE_DOCS else None,
     openapi_tags=TAGS_METADATA,
     contact={
         "name": "Verifly",
@@ -87,6 +93,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'none'; "
+    "object-src 'none'"
+)
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    headers = response.headers
+    headers["X-Content-Type-Options"] = "nosniff"
+    headers["X-Frame-Options"] = "DENY"
+    headers["Referrer-Policy"] = "no-referrer"
+    headers["Content-Security-Policy"] = _CSP
+    headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    if request.url.path.startswith("/api/"):
+        headers["Cache-Control"] = "no-store"
+    return response
+
 
 install_error_handlers(app)
 
