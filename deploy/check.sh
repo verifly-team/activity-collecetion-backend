@@ -102,4 +102,4 @@ esac
 
 printf '\n\033[1m做完记得删掉这条测试数据：\033[0m\n'
 echo "  mysql -h$DB_HOST -u$DB_USER -p $DB_NAME -e \"DELETE FROM application WHERE brand_name='自检店铺';\""
-echo "  rm -rf /opt/verifly/uploads/<上面的 id>"
+echo "  rm -rf /verifly/activity/uploads/<上面的 id>"

@@ -11,7 +11,7 @@
    └─ ② POST /api/v1/applications   表单 + file_ids
                         │
                         ├── MySQL        application / file 两张表
-                        └── /opt/verifly/uploads/{报名id}/  附件按人分目录
+                        └── /verifly/activity/uploads/{报名id}/  附件按人分目录
 ```
 
 ---

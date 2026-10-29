@@ -74,11 +74,11 @@ docker push $REG/arceus/activity-66-collection-backend:latest
 ```bash
 # 本机上传代码
 rsync -av --exclude .git --exclude data --exclude .env --exclude .pytest_cache \
-  ./ user@<服务器>:/opt/verifly-signup/
+  ./ user@<服务器>:/verifly/activity-signup/
 
 # 服务器上构建并推送
 ssh user@<服务器>
-cd /opt/verifly-signup
+cd /verifly/activity-signup
 docker build -t crpi-quxtxo1i28qk1e0c.cn-guangzhou.personal.cr.aliyuncs.com/arceus/activity-66-collection-backend:1.2.0 .
 docker push crpi-quxtxo1i28qk1e0c.cn-guangzhou.personal.cr.aliyuncs.com/arceus/activity-66-collection-backend:1.2.0
 ```
@@ -90,16 +90,16 @@ docker push crpi-quxtxo1i28qk1e0c.cn-guangzhou.personal.cr.aliyuncs.com/arceus/a
 ## 步骤 3：服务器准备目录
 
 ```bash
-mkdir -p /opt/verifly/uploads /opt/verifly/backups
+mkdir -p /verifly/activity/uploads /verifly/activity/backups
 
 # 容器内以 uid 10001 运行，宿主机目录必须给权限，否则上传报 Permission denied
-chown -R 10001:10001 /opt/verifly/uploads
+chown -R 10001:10001 /verifly/activity/uploads
 ```
 
 | 目录 | 用途 |
 |---|---|
-| `/opt/verifly/uploads` | **附件本体**，挂载到容器 `/data/uploads` |
-| `/opt/verifly/backups` | 备份产物 |
+| `/verifly/activity/uploads` | **附件本体**，挂载到容器 `/data/uploads` |
+| `/verifly/activity/backups` | 备份产物 |
 
 > 文件为什么要放宿主机目录：见 [数据库与存储 · 文件存储](../docs/DATABASE.md#2-文件存储)。
 
@@ -108,7 +108,7 @@ chown -R 10001:10001 /opt/verifly/uploads
 ## 步骤 4：启动容器
 
 ```bash
-cd /opt/verifly-signup          # 放 .env 的目录
+cd /verifly/activity-signup          # 放 .env 的目录
 cp .env.example .env
 vim .env                        # 填 DATABASE_URL（必改）、其它按需
 ```
@@ -137,7 +137,7 @@ docker run -d \
   --env-file .env \
   -e UPLOAD_DIR=/data/uploads \
   -p 8000:8000 \
-  -v /opt/verifly/uploads:/data/uploads \
+  -v /verifly/activity/uploads:/data/uploads \
   crpi-quxtxo1i28qk1e0c.cn-guangzhou.personal.cr.aliyuncs.com/arceus/activity-66-collection-backend:1.2.0
 ```
 
@@ -167,7 +167,7 @@ mysql -h <host> -u verifly -p verifly_signup \
   -e "SELECT id, brand_name, phone, zones, created_at FROM application ORDER BY id DESC LIMIT 5;"
 
 # 文件（应看到 <报名id>/<uuid>.zip）
-ls -R /opt/verifly/uploads | head
+ls -R /verifly/activity/uploads | head
 ```
 
 前端联调：`http://<服务器>:8000/docs` 可以直接在页面上试两个接口。
@@ -178,19 +178,19 @@ ls -R /opt/verifly/uploads | head
 
 ```bash
 # 附件
-tar -czf /opt/verifly/backups/uploads-$(date +%F).tar.gz -C /opt/verifly/uploads .
+tar -czf /verifly/activity/backups/uploads-$(date +%F).tar.gz -C /verifly/activity/uploads .
 
 # 数据库
 mysqldump -h <host> -u verifly -p --single-transaction \
   --default-character-set=utf8mb4 verifly_signup \
-  | gzip > /opt/verifly/backups/db-$(date +%F).sql.gz
+  | gzip > /verifly/activity/backups/db-$(date +%F).sql.gz
 ```
 
 crontab（清理孤儿附件 + 每日备份）：
 
 ```cron
 0 3 * * * docker exec -T verifly-signup python -m app.cleanup --hours 24
-0 4 * * * /opt/verifly/backup.sh
+0 4 * * * /verifly/activity/backup.sh
 ```
 
 恢复流程见 [数据库与存储 §3.2](../docs/DATABASE.md#32-恢复)。
@@ -217,7 +217,7 @@ crontab（清理孤儿附件 + 每日备份）：
 | 容器反复重启，日志 `Access denied for user` | `DATABASE_URL` 账号密码不对，或授权不是 `'verifly'@'%'` |
 | `/healthz` 返回 503 | 数据库连不上：网络/白名单、端口、库名、账号 |
 | 日志 `Table doesn't exist` | 账号缺 `CREATE` 权限，让 DBA 直接执行 `app/schema_mysql.sql` |
-| 上传报 500，日志 `Permission denied` | `chown -R 10001:10001 /opt/verifly/uploads` |
+| 上传报 500，日志 `Permission denied` | `chown -R 10001:10001 /verifly/activity/uploads` |
 | 中文变问号 | 库或表不是 `utf8mb4`，重建库时指定 `CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci` |
 | 提交报 429 | 触发限流，调大 `RATE_LIMIT_PER_MINUTE` 或检查 `X-Forwarded-For` |
 | 上传大文件失败 | `MAX_FILE_MB` / `MAX_TOTAL_MB` 没调，或前面有 nginx `client_max_body_size` |

@@ -13,7 +13,7 @@
                                      │ stored_path = "12/3f2a….zip"
                                      ▼
                       ┌──────────────────────────────────────────┐
-                      │  磁盘: /opt/verifly/uploads              │
+                      │  磁盘: /verifly/activity/uploads              │
                       │   ├── 12/                                │
                       │   │   └── 3f2a….zip                      │
                       │   └── 3f2a….zip  （已传未提交的孤儿）    │
@@ -80,7 +80,7 @@
 ### 2.1 目录布局
 
 ```
-$UPLOAD_DIR/                     容器内 /data/uploads，宿主机 /opt/verifly/uploads
+$UPLOAD_DIR/                     容器内 /data/uploads，宿主机 /verifly/activity/uploads
 ├── 3f2a1c9b0d4e….zip            ← 已上传、尚未提交（孤儿）
 ├── 4d2f7a318c9e….png            ← 同上
 ├── 12/                          ← 报名 id=12 的附件
@@ -91,7 +91,7 @@ $UPLOAD_DIR/                     容器内 /data/uploads，宿主机 /opt/verifl
 ```
 
 - **文件名用 uuid**：避免重名冲突、中文乱码、路径穿越（原始文件名只存库，不落盘）
-- **按报名 id 分目录**：运营要某家的材料，`ls /opt/verifly/uploads/12/` 即可
+- **按报名 id 分目录**：运营要某家的材料，`ls /verifly/activity/uploads/12/` 即可
 - **提交时移动**：从根目录挪进 `{报名id}/`，同时更新 `stored_path`
 
 ### 2.2 一个文件的生命周期
@@ -125,26 +125,26 @@ $UPLOAD_DIR/                     容器内 /data/uploads，宿主机 /opt/verifl
 STAMP=$(date +%F)
 
 # ① 文件
-tar -czf /opt/verifly/backups/uploads-$STAMP.tar.gz -C /opt/verifly/uploads .
+tar -czf /verifly/activity/backups/uploads-$STAMP.tar.gz -C /verifly/activity/uploads .
 
 # ② 数据库
 mysqldump -h <host> -u verifly -p --single-transaction \
   --default-character-set=utf8mb4 verifly_signup \
-  | gzip > /opt/verifly/backups/db-$STAMP.sql.gz
+  | gzip > /verifly/activity/backups/db-$STAMP.sql.gz
 ```
 
 放进 crontab：
 
 ```cron
-0 3 * * * /opt/verifly/backup.sh
+0 3 * * * /verifly/activity/backup.sh
 ```
 
 ### 3.2 恢复
 
 ```bash
 gunzip < db-2026-12-20.sql.gz | mysql -h <host> -u verifly -p verifly_signup
-tar -xzf uploads-2026-12-20.tar.gz -C /opt/verifly/uploads
-chown -R 10001:10001 /opt/verifly/uploads
+tar -xzf uploads-2026-12-20.tar.gz -C /verifly/activity/uploads
+chown -R 10001:10001 /verifly/activity/uploads
 ```
 
 ### 3.3 校验一致性
@@ -159,7 +159,7 @@ SELECT id, stored_path FROM file WHERE application_id IS NOT NULL;
 # 逐个核对（在宿主机执行）
 mysql -N -h <host> -u verifly -p verifly_signup \
   -e "SELECT stored_path FROM file WHERE application_id IS NOT NULL" \
-| while read p; do [ -f "/opt/verifly/uploads/$p" ] || echo "缺失: $p"; done
+| while read p; do [ -f "/verifly/activity/uploads/$p" ] || echo "缺失: $p"; done
 ```
 
 ---
@@ -197,7 +197,7 @@ DELETE FROM application WHERE id = 123;   -- file 记录随外键级联删除
 ```
 
 ```bash
-rm -rf /opt/verifly/uploads/123
+rm -rf /verifly/activity/uploads/123
 ```
 
 ---

@@ -5,7 +5,7 @@ set -euo pipefail
 
 ENV_FILE="${1:-.env}"
 IMAGE="${IMAGE:-crpi-quxtxo1i28qk1e0c.cn-guangzhou.personal.cr.aliyuncs.com/arceus/activity-66-collection-backend:latest}"
-UPLOAD_DIR_HOST="${UPLOAD_DIR_HOST:-/opt/verifly/uploads}"
+UPLOAD_DIR_HOST="${UPLOAD_DIR_HOST:-/verifly/activity/uploads}"
 
 mkdir -p "$UPLOAD_DIR_HOST"
 docker rm -f verifly-signup >/dev/null 2>&1 || true
