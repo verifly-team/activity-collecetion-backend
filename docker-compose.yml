@@ -22,8 +22,8 @@ services:
 
   signup:
     build: .
-    image: verifly-signup:1.2.0
-    container_name: verifly-signup
+    image: activity-collection-api:1.2.0
+    container_name: activity-collection-api
     restart: unless-stopped
     depends_on:
       db:

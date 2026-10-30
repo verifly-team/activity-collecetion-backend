@@ -74,7 +74,7 @@ head_ "6/7 应用健康检查"
 if curl -sf "$APP/healthz" >/dev/null; then
   pass "$(curl -s "$APP/healthz")"
 else
-  fail "应用未就绪，看 docker logs --tail 30 verifly-signup"
+  fail "应用未就绪，看 docker logs --tail 30 activity-collection-api"
 fi
 
 head_ "7/7 业务链路：上传附件 → 提交报名"

@@ -2,10 +2,10 @@
 # 上传目录诊断：一次看清「配置 / 挂载 / 磁盘 / 数据库」是否一致
 #
 # 用法（在服务器上）：bash diagnose-upload.sh [容器名] [宿主机附件目录]
-#   bash diagnose-upload.sh verifly-signup /verifly/activity/uploads
+#   bash diagnose-upload.sh activity-collection-api /verifly/activity/uploads
 
 set -uo pipefail
-CONTAINER="${1:-verifly-signup}"
+CONTAINER="${1:-activity-collection-api}"
 HOST_DIR="${2:-/verifly/activity/uploads}"
 
 say() { printf '%s\n' "$*"; }

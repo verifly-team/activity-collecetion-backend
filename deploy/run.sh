@@ -6,7 +6,7 @@ set -euo pipefail
 ENV_FILE="${1:-.env}"
 IMAGE="${IMAGE:-crpi-quxtxo1i28qk1e0c.cn-guangzhou.personal.cr.aliyuncs.com/arceus/activity-66-collection-backend:latest}"
 UPLOAD_DIR_HOST="${UPLOAD_DIR_HOST:-/verifly/activity/uploads}"
-CONTAINER="${CONTAINER:-verifly-signup}"
+CONTAINER="${CONTAINER:-activity-collection-api}"
 PORT="${PORT:-8000}"
 
 # ---- 拦截 .env 里把 UPLOAD_DIR 写成宿主机路径 ----

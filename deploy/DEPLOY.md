@@ -132,7 +132,7 @@ ALLOWED_ORIGINS=*
 
 ```bash
 docker run -d \
-  --name verifly-signup \
+  --name activity-collection-api \
   --restart unless-stopped \
   --env-file .env \
   -e UPLOAD_DIR=/data/uploads \
@@ -148,7 +148,7 @@ docker run -d \
 ## 步骤 5：验收
 
 ```bash
-docker ps --filter name=verifly-signup        # Up (healthy)
+docker ps --filter name=activity-collection-api        # Up (healthy)
 curl -s localhost:8000/healthz                # {"ok":true}
 curl -s -o /dev/null -w '%{http_code}\n' localhost:8000/docs   # 200
 ```
@@ -189,7 +189,7 @@ mysqldump -h <host> -u verifly -p --single-transaction \
 crontab（清理孤儿附件 + 每日备份）：
 
 ```cron
-0 3 * * * docker exec -T verifly-signup python -m app.cleanup --hours 24
+0 3 * * * docker exec -T activity-collection-api python -m app.cleanup --hours 24
 0 4 * * * /verifly/activity/backup.sh
 ```
 
@@ -201,12 +201,12 @@ crontab（清理孤儿附件 + 每日备份）：
 
 | 操作 | 命令 |
 |---|---|
-| 看日志 | `docker logs -f verifly-signup` |
-| 重启 | `docker restart verifly-signup` |
-| 升级 | `docker pull <镜像>:latest && docker rm -f verifly-signup && ./deploy/run.sh .env` |
+| 看日志 | `docker logs -f activity-collection-api` |
+| 重启 | `docker restart activity-collection-api` |
+| 升级 | `docker pull <镜像>:latest && docker rm -f activity-collection-api && ./deploy/run.sh .env` |
 | 回滚 | `TAG=1.2.0 ./deploy/run.sh .env`（旧 tag 保留在仓库） |
-| 进容器 | `docker exec -it verifly-signup sh` |
-| 清理孤儿附件 | `docker exec -T verifly-signup python -m app.cleanup --hours 24 --dry-run` |
+| 进容器 | `docker exec -it activity-collection-api sh` |
+| 清理孤儿附件 | `docker exec -T activity-collection-api python -m app.cleanup --hours 24 --dry-run` |
 
 ---
 

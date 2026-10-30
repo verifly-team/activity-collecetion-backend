@@ -171,8 +171,8 @@ mysql -N -h <host> -u verifly -p verifly_signup \
 传了附件却没提交的记录会一直堆在根目录：
 
 ```bash
-docker exec -T verifly-signup python -m app.cleanup --hours 24 --dry-run   # 先看
-docker exec -T verifly-signup python -m app.cleanup --hours 24            # 再删
+docker exec -T activity-collection-api python -m app.cleanup --hours 24 --dry-run   # 先看
+docker exec -T activity-collection-api python -m app.cleanup --hours 24            # 再删
 ```
 
 建议挂 crontab 每天跑一次。

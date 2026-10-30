@@ -149,9 +149,9 @@ jobs:
           docker pull "$FULL"
 
           start() {
-            docker rm -f verifly-signup >/dev/null 2>&1 || true
+            docker rm -f activity-collection-api >/dev/null 2>&1 || true
             docker run -d \
-              --name verifly-signup \
+              --name activity-collection-api \
               --restart unless-stopped \
               --env-file /verifly/activity/.env \
               -e UPLOAD_DIR=/data/uploads \
@@ -183,7 +183,7 @@ jobs:
           fi
 
           echo "健康检查失败，容器日志："
-          docker logs --tail 40 verifly-signup || true
+          docker logs --tail 40 activity-collection-api || true
           if [ -n "$PREV" ]; then
             echo "==> 回滚到 $PREV"
             start "$IMAGE:$PREV"

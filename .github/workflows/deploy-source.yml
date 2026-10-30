@@ -139,22 +139,46 @@ jobs:
           PREV="$(cat .last-image 2>/dev/null || echo '')"
           echo "==> 新版本：$TAG   当前版本：${PREV:-无}"
 
+          echo "==> 当前占用 8000 端口的容器"
+          docker ps --filter 'publish=8000' --format '    {{.Names}}   {{.Image}}   {{.Status}}' || true
+          echo "==> 现有 signup 相关容器"
+          docker ps -a --filter 'name=collection-api' --format '    {{.Names}}   {{.Image}}   {{.Status}}' || true
+
           mkdir -p src
           find src -mindepth 1 -delete 2>/dev/null || true
           tar xzf src.tar.gz -C src
           rm -f src.tar.gz
 
           echo "==> 构建镜像"
-          if ! docker build -t "verifly-signup:$TAG" -t verifly-signup:latest src; then
+          if ! docker build -t "activity-collection-api:$TAG" -t activity-collection-api:latest src; then
             echo "构建失败，线上保持不动"
             exit 1
           fi
 
+          free_port() {
+            # 释放 8000 端口：可能被旧容器（名字不一样）或别的进程占着
+            local ids
+            ids="$(docker ps -q --filter 'publish=8000' 2>/dev/null || true)"
+            if [ -n "$ids" ]; then
+              echo "  释放占用 8000 端口的容器："
+              docker ps --filter 'publish=8000' --format '    {{.Names}}  {{.Image}}' || true
+              docker rm -f $ids >/dev/null 2>&1 || true
+              sleep 1
+            fi
+            if ss -tln 2>/dev/null | grep -q ':8000 '; then
+              echo "  ⚠️ 仍有进程占用 8000 端口（不是 docker 容器）"
+              ss -tlnp 2>/dev/null | grep ':8000 ' || true
+              return 1
+            fi
+            return 0
+          }
+
           start_container() {
             local img="$1"
-            docker rm -f verifly-signup >/dev/null 2>&1 || true
+            docker rm -f activity-collection-api >/dev/null 2>&1 || true
+            free_port || return 1
             docker run -d \
-              --name verifly-signup \
+              --name activity-collection-api \
               --restart unless-stopped \
               --env-file /verifly/activity/.env \
               -e UPLOAD_DIR=/data/uploads \
@@ -172,10 +196,10 @@ jobs:
           }
 
           echo "==> 启动新版本"
-          if ! start_container "verifly-signup:$TAG"; then
+          if ! start_container "activity-collection-api:$TAG"; then
             echo "容器启动失败，回滚"
             if [ -n "$PREV" ]; then
-              start_container "verifly-signup:$PREV" && healthy && echo "已回滚到 $PREV"
+              start_container "activity-collection-api:$PREV" && healthy && echo "已回滚到 $PREV"
             fi
             exit 1
           fi
@@ -186,22 +210,22 @@ jobs:
             echo "--- /healthz ---"
             curl -s http://127.0.0.1:8000/healthz; echo
             echo "--- 容器内 UPLOAD_DIR ---"
-            docker exec verifly-signup printenv UPLOAD_DIR || true
+            docker exec activity-collection-api printenv UPLOAD_DIR || true
             echo "--- 容器内文件数 ---"
-            docker exec verifly-signup sh -c 'ls -1 /data/uploads 2>/dev/null | wc -l' || true
+            docker exec activity-collection-api sh -c 'ls -1 /data/uploads 2>/dev/null | wc -l' || true
             echo "--- 宿主机文件数 ---"
             host_n=$(ls -1A /verifly/activity/uploads 2>/dev/null | wc -l) || host_n="读不到"
             echo "$host_n"
-            { docker images verifly-signup --format '{{.Tag}}' | grep -v '^latest$' \
-              | tail -n +6 | while read -r t; do docker rmi "verifly-signup:$t" >/dev/null 2>&1 || true; done; } || true
+            { docker images activity-collection-api --format '{{.Tag}}' | grep -v '^latest$' \
+              | tail -n +6 | while read -r t; do docker rmi "activity-collection-api:$t" >/dev/null 2>&1 || true; done; } || true
             exit 0
           fi
 
           echo "健康检查失败，容器日志："
-          docker logs --tail 40 verifly-signup || true
+          docker logs --tail 40 activity-collection-api || true
           if [ -n "$PREV" ]; then
             echo "==> 回滚到 $PREV"
-            start_container "verifly-signup:$PREV"
+            start_container "activity-collection-api:$PREV"
             if healthy; then echo "已回滚到 $PREV"; else echo "回滚后仍不健康，需人工处理"; fi
           else
             echo "没有上一版可回滚，请人工处理"
