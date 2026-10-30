@@ -63,7 +63,10 @@ def _payload(**over):
 
 
 def test_healthz(client):
-    assert client.get("/healthz").json() == {"ok": True}
+    body = client.get("/healthz").json()
+    assert body["ok"] is True
+    assert "upload_dir" in body, "健康检查应带附件目录信息，方便排查挂载问题"
+    assert body["upload_files"] >= 0
 
 
 def test_upload_and_submit(client):
@@ -184,7 +187,7 @@ def test_zones_deduped(client):
 
 
 def test_healthz_checks_db(client):
-    assert client.get("/healthz").json() == {"ok": True}
+    assert client.get("/healthz").json()["ok"] is True
 
 
 def test_rate_limit(client, monkeypatch):

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import time
 import uuid
@@ -63,9 +64,42 @@ TAGS_METADATA = [
 ]
 
 
+logger = logging.getLogger("signup.startup")
+
+
+def _check_upload_dir() -> None:
+    """启动时检查附件目录，装错路径要能立刻发现。"""
+    path = settings.upload_path
+    try:
+        on_disk = sum(1 for _ in path.iterdir())
+    except OSError as exc:
+        logger.warning("附件目录 %s 读不了：%s", path, exc)
+        on_disk = -1
+    try:
+        in_db = db.fetch_one("SELECT COUNT(*) AS n FROM file")
+        in_db = int(in_db["n"]) if in_db else 0
+    except Exception:  # noqa: BLE001 - 自检不该影响启动
+        in_db = -1
+
+    logger.info("附件目录：%s（磁盘文件 %s 个，数据库 %s 条）", path.resolve(), on_disk, in_db)
+
+    if in_db > 0 and on_disk == 0:
+        logger.warning(
+            "⚠️ 数据库里有 %d 条附件记录，但 %s 下一个文件都没有！\n"
+            "   最常见原因：UPLOAD_DIR 写成了宿主机路径。\n"
+            "   UPLOAD_DIR 必须是【容器内路径】（如 /data/uploads），"
+            "宿主机路径只能写在 docker run 的 -v 参数里。",
+            in_db,
+            path,
+        )
+    elif in_db > 0 and on_disk > 0 and on_disk < in_db:
+        logger.warning("⚠️ 数据库 %d 条附件记录，磁盘只有 %d 个文件，挂载可能不完整", in_db, on_disk)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     db.init_db()
+    _check_upload_dir()
     yield
 
 
@@ -163,7 +197,14 @@ def healthz() -> dict:
         db.ping()
     except Exception:  # 健康检查只关心能不能连上
         raise HTTPException(status_code=503, detail="数据库不可用") from None
-    return {"ok": True}
+
+    info: dict = {"ok": True, "upload_dir": str(settings.upload_path)}
+    try:
+        info["upload_files"] = sum(1 for _ in settings.upload_path.iterdir())
+    except OSError:
+        info["upload_files"] = -1
+        info["warn"] = "附件目录不可读，检查挂载与权限"
+    return info
 
 
 # ---------------------------------------------------------------- 1. 上传附件
