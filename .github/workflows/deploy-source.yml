@@ -1,0 +1,216 @@
+name: 部署（源码构建·主流程）
+
+# 不依赖镜像仓库：源码传到服务器，在服务器上 docker build 后重启容器。
+# 服务器需准备：Docker、/verifly/activity/.env、/verifly/activity/uploads
+#
+#   push main -> 自动测试 + 部署
+#   手动触发   -> 可跳过测试直接部署
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - ".github/workflows/ci-cd.yml"
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: "跳过测试"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-signup-source
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: 测试
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_tests }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 安装依赖
+        run: pip install -r requirements-dev.txt
+
+      - name: 代码风格
+        run: |
+          ruff check app tests
+          ruff format --check app tests
+
+      - name: 单元测试
+        run: pytest -q
+
+  deploy:
+    name: 部署到服务器
+    runs-on: ubuntu-latest
+    needs: test
+    if: ${{ always() && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
+    environment: acr
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 准备 SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+
+      - name: 服务器环境自检
+        run: |
+          ssh -i ~/.ssh/id_deploy -p "${{ secrets.SSH_PORT || 22 }}" \
+            -o StrictHostKeyChecking=accept-new \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" 'bash -s' <<'REMOTE'
+          set -uo pipefail
+          fail=0
+          say() { printf '  %s\n' "$1"; }
+          echo "== 服务器环境检查 =="
+          command -v docker >/dev/null 2>&1 && say "docker 已安装" || { say "缺 docker"; fail=1; }
+          docker ps >/dev/null 2>&1 && say "docker 可用" || { say "当前用户不能操作 docker"; fail=1; }
+
+          if [ -f /verifly/activity/.env ]; then
+            say ".env 存在"
+            if grep -qE '^[[:space:]]*UPLOAD_DIR[[:space:]]*=' /verifly/activity/.env; then
+              say "注意：.env 里设了 UPLOAD_DIR，启动时会用 -e UPLOAD_DIR=/data/uploads 覆盖"
+            fi
+          else
+            say "缺 /verifly/activity/.env"
+            fail=1
+          fi
+
+          if [ -d /verifly/activity/uploads ]; then
+            say "附件目录存在"
+          else
+            say "缺 /verifly/activity/uploads"
+            say "  用 root 执行：mkdir -p /verifly/activity/uploads && chown -R 10001:10001 /verifly/activity/uploads"
+            fail=1
+          fi
+
+          if [ -d /verifly/activity ] && [ -w /verifly/activity ]; then
+            say "构建目录可写"
+          else
+            say "/verifly/activity 不可写"
+            say "  用 root 执行：mkdir -p /verifly/activity && chown -R deploy:deploy /verifly/activity"
+            fail=1
+          fi
+          df -h /verifly 2>/dev/null | tail -1 | awk '{print "  磁盘剩余：" $4}'
+          exit $fail
+          REMOTE
+
+      - name: 打包源码
+        run: |
+          tar czf /tmp/src.tar.gz \
+            --exclude='.git' --exclude='.venv' --exclude='demo' \
+            --exclude='__pycache__' --exclude='.pytest_cache' \
+            --exclude='.ruff_cache' --exclude='docs' --exclude='data' .
+          ls -lh /tmp/src.tar.gz
+
+      - name: 上传源码
+        run: |
+          SSH_OPTS="-i ~/.ssh/id_deploy -p ${{ secrets.SSH_PORT || 22 }} -o StrictHostKeyChecking=accept-new"
+          TARGET="${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          ssh $SSH_OPTS "$TARGET" 'mkdir -p /verifly/activity/src' \
+            || { echo "::error::无法创建 /verifly/activity/src —— 用 root 执行：mkdir -p /verifly/activity && chown -R deploy:deploy /verifly/activity"; exit 1; }
+          scp -i ~/.ssh/id_deploy -P "${{ secrets.SSH_PORT || 22 }}" -o StrictHostKeyChecking=accept-new \
+            /tmp/src.tar.gz "$TARGET:/verifly/activity/src.tar.gz"
+
+      - name: 构建并重启
+        env:
+          SHA_SHORT: ${{ github.sha }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -p "${{ secrets.SSH_PORT || 22 }}" \
+            -o StrictHostKeyChecking=accept-new \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "SHA_SHORT='${SHA_SHORT:0:7}' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd /verifly/activity
+
+          TAG="$(date +%Y%m%d-%H%M%S)-${SHA_SHORT}"
+          PREV="$(cat .last-image 2>/dev/null || echo '')"
+          echo "==> 新版本：$TAG   当前版本：${PREV:-无}"
+
+          mkdir -p src
+          find src -mindepth 1 -delete 2>/dev/null || true
+          tar xzf src.tar.gz -C src
+          rm -f src.tar.gz
+
+          echo "==> 构建镜像"
+          if ! docker build -t "verifly-signup:$TAG" -t verifly-signup:latest src; then
+            echo "构建失败，线上保持不动"
+            exit 1
+          fi
+
+          start_container() {
+            local img="$1"
+            docker rm -f verifly-signup >/dev/null 2>&1 || true
+            docker run -d \
+              --name verifly-signup \
+              --restart unless-stopped \
+              --env-file /verifly/activity/.env \
+              -e UPLOAD_DIR=/data/uploads \
+              -p 8000:8000 \
+              -v /verifly/activity/uploads:/data/uploads \
+              "$img"
+          }
+
+          healthy() {
+            for _ in $(seq 1 30); do
+              curl -sf http://127.0.0.1:8000/healthz >/dev/null 2>&1 && return 0
+              sleep 2
+            done
+            return 1
+          }
+
+          echo "==> 启动新版本"
+          if ! start_container "verifly-signup:$TAG"; then
+            echo "容器启动失败，回滚"
+            if [ -n "$PREV" ]; then
+              start_container "verifly-signup:$PREV" && healthy && echo "已回滚到 $PREV"
+            fi
+            exit 1
+          fi
+
+          if healthy; then
+            echo "$TAG" > .last-image
+            echo "部署成功：$TAG"
+            echo "--- /healthz ---"
+            curl -s http://127.0.0.1:8000/healthz; echo
+            echo "--- 容器内 UPLOAD_DIR ---"
+            docker exec verifly-signup printenv UPLOAD_DIR || true
+            echo "--- 容器内文件数 ---"
+            docker exec verifly-signup sh -c 'ls -1 /data/uploads 2>/dev/null | wc -l' || true
+            echo "--- 宿主机文件数 ---"
+            host_n=$(ls -1A /verifly/activity/uploads 2>/dev/null | wc -l) || host_n="读不到"
+            echo "$host_n"
+            { docker images verifly-signup --format '{{.Tag}}' | grep -v '^latest$' \
+              | tail -n +6 | while read -r t; do docker rmi "verifly-signup:$t" >/dev/null 2>&1 || true; done; } || true
+            exit 0
+          fi
+
+          echo "健康检查失败，容器日志："
+          docker logs --tail 40 verifly-signup || true
+          if [ -n "$PREV" ]; then
+            echo "==> 回滚到 $PREV"
+            start_container "verifly-signup:$PREV"
+            if healthy; then echo "已回滚到 $PREV"; else echo "回滚后仍不健康，需人工处理"; fi
+          else
+            echo "没有上一版可回滚，请人工处理"
+          fi
+          exit 1
+          REMOTE
+
+      - name: 部署结果
+        if: always()
+        run: |
+          echo "提交：${{ github.sha }}"
+          echo "分支：${{ github.ref_name }}"
