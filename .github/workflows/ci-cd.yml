@@ -154,8 +154,8 @@ jobs:
               --name activity-collection-api \
               --restart unless-stopped \
               --env-file /verifly/activity/.env \
+              --network host \
               -e UPLOAD_DIR=/data/uploads \
-              -p 8000:8000 \
               -v /verifly/activity/uploads:/data/uploads \
               "$1"
           }

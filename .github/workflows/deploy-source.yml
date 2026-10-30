@@ -139,10 +139,10 @@ jobs:
           PREV="$(cat .last-image 2>/dev/null || echo '')"
           echo "==> 新版本：$TAG   当前版本：${PREV:-无}"
 
-          echo "==> 当前占用 8000 端口的容器"
-          docker ps --filter 'publish=8000' --format '    {{.Names}}   {{.Image}}   {{.Status}}' || true
-          echo "==> 现有 signup 相关容器"
+          echo "==> 现有容器状态"
           docker ps -a --filter 'name=collection-api' --format '    {{.Names}}   {{.Image}}   {{.Status}}' || true
+          echo "==> 宿主机 8000 端口占用情况"
+          ss -tlnp 2>/dev/null | grep ':8000 ' | sed 's/^/    /' || echo "    （空闲）"
 
           mkdir -p src
           find src -mindepth 1 -delete 2>/dev/null || true
@@ -156,18 +156,21 @@ jobs:
           fi
 
           free_port() {
-            # 释放 8000 端口：可能被旧容器（名字不一样）或别的进程占着
+            # host 网络下 -p 不生效，容器直接占宿主机端口，只能看 ss
             local ids
-            ids="$(docker ps -q --filter 'publish=8000' 2>/dev/null || true)"
-            if [ -n "$ids" ]; then
-              echo "  释放占用 8000 端口的容器："
-              docker ps --filter 'publish=8000' --format '    {{.Names}}  {{.Image}}' || true
-              docker rm -f $ids >/dev/null 2>&1 || true
-              sleep 1
+            if ss -tln 2>/dev/null | grep -q ':8000 '; then
+              echo "  8000 端口被占用，查找占用者："
+              ss -tlnp 2>/dev/null | grep ':8000 ' | sed 's/^/    /' || true
+              ids="$(docker ps -q --filter 'name=collection-api' 2>/dev/null || true)"
+              if [ -n "$ids" ]; then
+                docker ps --filter 'name=collection-api' --format '    删除 {{.Names}}  {{.Image}}' || true
+                docker rm -f $ids >/dev/null 2>&1 || true
+                sleep 2
+              fi
             fi
             if ss -tln 2>/dev/null | grep -q ':8000 '; then
-              echo "  ⚠️ 仍有进程占用 8000 端口（不是 docker 容器）"
-              ss -tlnp 2>/dev/null | grep ':8000 ' || true
+              echo "  ❌ 8000 端口仍被非本容器占用，需人工处理（nginx 等）"
+              ss -tlnp 2>/dev/null | grep ':8000 ' | sed 's/^/    /' || true
               return 1
             fi
             return 0
@@ -180,9 +183,9 @@ jobs:
             docker run -d \
               --name activity-collection-api \
               --restart unless-stopped \
+              --network host \
               --env-file /verifly/activity/.env \
               -e UPLOAD_DIR=/data/uploads \
-              -p 8000:8000 \
               -v /verifly/activity/uploads:/data/uploads \
               "$img"
           }

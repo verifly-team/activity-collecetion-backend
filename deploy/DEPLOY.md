@@ -136,7 +136,7 @@ docker run -d \
   --restart unless-stopped \
   --env-file .env \
   -e UPLOAD_DIR=/data/uploads \
-  -p 8000:8000 \
+  --network host \
   -v /verifly/activity/uploads:/data/uploads \
   crpi-quxtxo1i28qk1e0c.cn-guangzhou.personal.cr.aliyuncs.com/arceus/activity-66-collection-backend:1.2.0
 ```

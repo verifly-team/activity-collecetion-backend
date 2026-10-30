@@ -33,9 +33,9 @@ docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 docker run -d \
   --name "$CONTAINER" \
   --restart unless-stopped \
+  --network host \
   --env-file "$ENV_FILE" \
   -e UPLOAD_DIR=/data/uploads \
-  -p "$PORT:8000" \
   -v "$UPLOAD_DIR_HOST:/data/uploads" \
   "$IMAGE"
 
