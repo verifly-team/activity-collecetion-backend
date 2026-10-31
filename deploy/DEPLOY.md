@@ -1,5 +1,34 @@
 # 部署手册
 
+## v2 调研字段升级（2026-10）
+
+新增 12 个品牌调研字段 + D 区。**正常无需手工 DDL**：
+采集服务启动时 `init_db()` 会检测缺列并自动 `ALTER TABLE ADD COLUMN`。
+
+推荐顺序：
+
+```bash
+# 1. 先备份（1 分钟，出事能退）
+mysqldump -u root -p --single-transaction verifly_signup application file \
+  > backup_$(date +%Y%m%d_%H%M).sql
+
+# 2. 推采集服务 → CI 自动构建部署 → 容器启动时自动加列
+git push            # server 仓库
+
+# 3. 确认列已加上（应返回 12 行）
+mysql -u root -p verifly_signup -e "SHOW COLUMNS FROM application" | grep -E \
+  "founded_year|social_links|brand_intro|channels|has_physical_store|attended_other_events|past_experience|brand_specialty|target_consumers|planned_activities|willing_to_promote|authorize_media"
+
+# 4. 再推导出服务
+git push            # export-service 仓库
+```
+
+需要手工 DDL 的场景（应用账号无 ALTER 权限等）见 `deploy/migrate_v2.sql`。
+
+前端接完新表单后，把 `.env` 里 `SURVEY_REQUIRED` 改成 `1` 重启容器即可开始强制校验。
+
+
+
 > 相关文档：[README](../README.md) · [API](../docs/API.md) · [数据库与存储](../docs/DATABASE.md)
 
 镜像：
