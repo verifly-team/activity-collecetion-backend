@@ -35,6 +35,10 @@ class Settings:
 
         self.privacy_version = os.getenv("PRIVACY_VERSION", "v1.0")
 
+        # 调研新增题的必填开关：1 = 强制要求填全 12 项新问题
+        # 前端 H5 上线新表单之前保持 0，避免老页面提交直接 422
+        self.survey_required = os.getenv("SURVEY_REQUIRED", "0").lower() in ("1", "true", "yes")
+
     @property
     def max_file_bytes(self) -> int:
         return self.max_file_mb * 1024 * 1024

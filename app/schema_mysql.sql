@@ -27,6 +27,20 @@ CREATE TABLE IF NOT EXISTS application (
   pct_replica       TINYINT      NULL COMMENT '复刻／原创 %',
   items_json        TEXT         NULL COMMENT '代表商品清单 JSON',
 
+  -- 品牌背景与经营情况（v2 调研新增，历史数据为 NULL）
+  founded_year          INT          NULL COMMENT '品牌成立年份',
+  social_links          VARCHAR(2000) NULL COMMENT 'JSON: 社交平台链接',
+  brand_intro           TEXT         NULL COMMENT '品牌简介 100-300 字',
+  channels              VARCHAR(200) NULL COMMENT 'JSON: 主要经营渠道',
+  has_physical_store    TINYINT(1)   NULL COMMENT '是否有实体店',
+  attended_other_events TINYINT(1)   NULL COMMENT '是否参加过其他市集或展会',
+  past_experience       TEXT         NULL COMMENT '过往参展经历',
+  brand_specialty       TEXT         NULL COMMENT '品牌最有特色的地方',
+  target_consumers      VARCHAR(30)  NULL COMMENT '主要面向消费者',
+  planned_activities    VARCHAR(300) NULL COMMENT 'JSON: 特别商品或活动',
+  willing_to_promote    VARCHAR(30)  NULL COMMENT '配合品牌宣传意愿',
+  authorize_media       VARCHAR(30)  NULL COMMENT '素材授权范围',
+
   -- 合规
   consent_at        VARCHAR(32)  NULL COMMENT '同意时间 UTC',
   privacy_version   VARCHAR(20)  NULL COMMENT '政策版本',

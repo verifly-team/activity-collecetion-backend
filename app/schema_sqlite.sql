@@ -27,6 +27,20 @@ CREATE TABLE IF NOT EXISTS application (
   pct_replica       INTEGER,            -- 复刻／原创 %
   items_json        TEXT    NOT NULL DEFAULT '[]',  -- 代表商品 3~5 件
 
+  -- 品牌背景与经营情况（v2 调研新增，历史数据为 NULL）
+  founded_year          INTEGER,
+  social_links          TEXT    DEFAULT '[]',   -- JSON: ["https://..."]
+  brand_intro           TEXT,
+  channels              TEXT    DEFAULT '[]',   -- JSON: ["online_store"]
+  has_physical_store    INTEGER,                -- 1 有 / 0 没有
+  attended_other_events INTEGER,
+  past_experience       TEXT,
+  brand_specialty       TEXT,
+  target_consumers      TEXT,                   -- vintage/street/...
+  planned_activities    TEXT    DEFAULT '[]',   -- JSON
+  willing_to_promote    TEXT,                   -- provide_material/need_talk
+  authorize_media       TEXT,                   -- agree/need_scope
+
   -- 合规
   consent_at        TEXT,
   privacy_version   TEXT,

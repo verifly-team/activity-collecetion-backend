@@ -203,3 +203,133 @@ def test_rate_limit(client, monkeypatch):
     assert body["error"]["code"] == "RATE_LIMITED"
 
     main._hits.clear()
+
+
+# ---------------------------------------------------------------- v2 调研新增
+
+
+def test_form_schema(client):
+    """问卷结构接口：12 道新题 + D 区 + 新文案。"""
+    r = client.get("/api/v1/form-schema")
+    assert r.status_code == 200
+    data = r.json()
+
+    assert data["version"] == "v2"
+    assert data["required_hint"] == "带 * 为必填项"
+
+    zones = [z["value"] for z in data["zones"]]
+    assert "D" in zones, "开放 D 区报名"
+
+    questions = [q for g in data["groups"] for q in g["questions"]]
+    assert len(questions) == 12
+    keys = {q["key"] for q in questions}
+    assert {
+        "founded_year",
+        "social_links",
+        "brand_intro",
+        "channels",
+        "has_physical_store",
+        "attended_other_events",
+        "past_experience",
+        "brand_specialty",
+        "target_consumers",
+        "planned_activities",
+        "willing_to_promote",
+        "authorize_media",
+    } <= keys
+
+    # 文案要求
+    assert "2026.11.8" in data["copy"]["feedback"]
+    assert "2026.11.10" in data["copy"]["feedback"]
+    assert "2026.11.28" in data["copy"]["feedback"]
+    assert "2026.12.1" in data["copy"]["feedback"]
+    assert "增加入选概率" in data["copy"]["items_hint"]
+
+    # 只有过往参展经历不是必填
+    optional = {q["key"] for q in questions if not q["required"]}
+    assert optional == {"past_experience"}
+
+
+def _survey_payload():
+    return {
+        "founded_year": 2018,
+        "social_links": ["https://instagram.com/p/abc", "https://xhslink.com/xyz"],
+        "brand_intro": "这是一段用于测试的品牌简介。" * 10,  # 130 字
+        "channels": ["online_store", "market_stall"],
+        "has_physical_store": True,
+        "attended_other_events": False,
+        "past_experience": "2024 年参加过深圳湾市集",
+        "brand_specialty": "专营 90 年代日本 archive。" * 10,
+        "target_consumers": "vintage",
+        "planned_activities": ["limited", "onsite"],
+        "willing_to_promote": "provide_material",
+        "authorize_media": "agree",
+    }
+
+
+def test_submit_with_survey_v2(client):
+    """12 道新题能正常提交并落库。"""
+    r = client.post("/api/v1/applications", json=_payload(zones=["D"], **_survey_payload()))
+    assert r.status_code == 201, r.text
+    app_id = r.json()["id"]
+
+    from app import db
+
+    row = db.fetch_one("SELECT * FROM application WHERE id = ?", [app_id])
+    assert row["founded_year"] == 2018
+    assert row["has_physical_store"] == 1
+    assert row["attended_other_events"] == 0
+    assert row["target_consumers"] == "vintage"
+    assert row["authorize_media"] == "agree"
+    import json as _json
+
+    assert _json.loads(row["social_links"])[0].startswith("https://")
+    assert _json.loads(row["channels"]) == ["online_store", "market_stall"]
+    assert _json.loads(row["zones"]) == ["D"]
+
+
+def test_survey_validation(client):
+    """新字段的校验规则。"""
+    # 品牌简介不足 100 字
+    r = client.post("/api/v1/applications", json=_payload(brand_intro="太短了"))
+    assert r.status_code == 422
+
+    # 链接格式不对
+    r = client.post("/api/v1/applications", json=_payload(social_links=["instagram.com/abc"]))
+    assert r.status_code == 422
+
+    # 「没有特别安排」不能与其他同时选
+    r = client.post(
+        "/api/v1/applications",
+        json=_payload(planned_activities=["none", "limited"]),
+    )
+    assert r.status_code == 422
+
+    # 年份越界
+    r = client.post("/api/v1/applications", json=_payload(founded_year=1800))
+    assert r.status_code == 422
+
+
+def test_survey_backward_compatible(client):
+    """不传新字段也要能提交（前端未上线前的兼容）。"""
+    r = client.post("/api/v1/applications", json=_payload())
+    assert r.status_code == 201, r.text
+
+    from app import db
+
+    row = db.fetch_one("SELECT * FROM application WHERE id = ?", [r.json()["id"]])
+    assert row["founded_year"] is None
+    assert row["brand_intro"] is None
+
+
+def test_survey_strict_mode(client, monkeypatch):
+    """SURVEY_REQUIRED=1 时缺项直接 422，并指出缺了哪些。"""
+    from app import config
+
+    monkeypatch.setattr(config.settings, "survey_required", True)
+    r = client.post("/api/v1/applications", json=_payload())
+    assert r.status_code == 422
+    assert "必填项未填写" in r.text
+
+    r = client.post("/api/v1/applications", json=_payload(**_survey_payload()))
+    assert r.status_code == 201, r.text

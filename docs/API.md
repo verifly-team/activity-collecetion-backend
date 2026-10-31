@@ -116,8 +116,9 @@
 | `A` | A 区 · 收藏级 Archive |
 | `B` | B 区 · 工装与街头 |
 | `C` | C 区 · 二手名牌 / 样衣 |
+| `D` | D 区 · 新增开放网页报名 |
 
-> D 区（Living、餐饮酒水等）另行签约，不在线上表单范围内。
+> **v2 更新**：D 区已开放线上报名。
 
 ### 3.3 `entity_type` —— 经营主体类型（单选）
 
@@ -139,9 +140,63 @@
 
 约定值：`h5`（默认）· `qrcode` · `word`（运营代录）
 
+### 3.6 v2 调研新增枚举
+
+**`channels` 主要经营渠道（多选）**
+
+| 值 | 含义 |
+|---|---|
+| `online_store` | 线上店铺 |
+| `physical_store` | 线下实体店 |
+| `personal_social` | 个人社交媒体 |
+| `market_stall` | 市集摆摊 |
+| `multi_channel` | 多渠道经营 |
+
+**`target_consumers` 主要面向消费者（单选）**
+
+| 值 | 含义 |
+|---|---|
+| `vintage` | Vintage／古着爱好者 |
+| `street` | 潮流及街头文化消费者 |
+| `designer` | Designer／奢侈品消费者 |
+| `young` | 年轻消费群体 |
+| `collector` | 收藏爱好者 |
+| `other` | 其他 |
+
+**`planned_activities` 特别商品或活动（多选）**
+
+| 值 | 含义 |
+|---|---|
+| `limited` | 限量商品 |
+| `first_release` | 首次公开发售 |
+| `discount` | 特别折扣 |
+| `collab` | 品牌联名 |
+| `onsite` | 现场互动活动 |
+| `pr_license` | 品牌合作及宣传授权 |
+| `none` | 没有特别安排 |
+
+> 选 `none` 时不能与其他选项同时提交。
+
+**`willing_to_promote` 配合宣传意愿（单选）**
+
+| 值 | 含义 |
+|---|---|
+| `provide_material` | 愿意提供品牌照片及商品素材；配合品牌介绍及社交媒体宣传；转发官方活动宣传 |
+| `need_talk` | 希望主办方与我们进一步沟通 |
+
+**`authorize_media` 素材授权（单选）**
+
+| 值 | 含义 |
+|---|---|
+| `agree` | 同意 |
+| `need_scope` | 需要另行确认授权范围 |
+
 ---
 
 ## 4. 接口详情
+
+> v2 新增 `GET /api/v1/form-schema`，返回问卷分组、题目、选项、必填标记与文案，
+> 前端渲染表单直接用它，不要再硬编码选项。详见 [4.5](#45-获取问卷结构-v2-新增)。
 
 ### 4.1 上传附件
 
@@ -338,6 +393,44 @@ GET /
 
 ---
 
+### 4.5 获取问卷结构（v2 新增）
+
+```
+GET /api/v1/form-schema
+```
+
+无需鉴权。返回：
+
+```json
+{
+  "version": "v2",
+  "enforced": false,
+  "required_hint": "带 * 为必填项",
+  "copy": {
+    "feedback": "提交后，主办方将在 48 小时内反馈审核结果或补充资料需求。2026.11.8 为第一轮公开招募截止时间，统一回复时间为 2026.11.10；2026.11.28 为最终轮公开招募截止时间，统一回复时间为 2026.12.1。",
+    "items_hint": "添加代表商品可增加店家品牌力，显示商家独特性，会增加入选概率"
+  },
+  "zones": [{"value": "A", "label": "收藏级 Archive"}, "..."],
+  "groups": [
+    {
+      "title": "1. 品牌联络与定位特色",
+      "questions": [
+        {
+          "key": "founded_year",
+          "label": "品牌成立年份",
+          "type": "year",
+          "required": true,
+          "min": 1900,
+          "max": 2100
+        }
+      ]
+    }
+  ]
+}
+```
+
+`enforced` 为 `true` 时表示服务端强制校验全部必填项（对应环境变量 `SURVEY_REQUIRED=1`）。
+
 ## 5. 字段总表
 
 ### 5.1 报名表单 `ApplicationIn`
@@ -375,6 +468,26 @@ GET /
 | `items[].condition_source` | string \| null | | ≤ 200 字 | 状态及来源 |
 | `items[].price` | int \| null | | ≥ 0 | 拟售价（元） |
 
+#### 品牌背景与经营情况（v2 新增）
+
+> 标 ✅ 的题目在 `SURVEY_REQUIRED=1` 时强制校验；默认为 0，
+> 老页面不传也不会被拒。长度/格式校验始终生效。
+
+| 字段 | 类型 | 必填* | 约束 | 说明 |
+|---|---|---|---|---|
+| `founded_year` | int \| null | ✅ | 1900–2100 | 品牌成立年份 |
+| `social_links` | string[] | ✅ | 1–5 条，须 `http(s)://` 开头，去重 | Instagram／小红书／抖音 |
+| `brand_intro` | string \| null | ✅ | 100–300 字 | 品牌简介 |
+| `channels` | string[] | ✅ | 至少 1 个，见 3.6 | 主要经营渠道 |
+| `has_physical_store` | bool \| null | ✅ | true/false | 是否有实体店 |
+| `attended_other_events` | bool \| null | ✅ | true/false | 是否参加过其他市集或展会 |
+| `past_experience` | string \| null | | ≤ 1000 字 | 过往参展经历 |
+| `brand_specialty` | string \| null | ✅ | 100–300 字 | 品牌最有特色的地方 |
+| `target_consumers` | string \| null | ✅ | 见 3.6 | 主要面向的消费者 |
+| `planned_activities` | string[] | ✅ | 至少 1 个，`none` 互斥 | 特别商品或活动 |
+| `willing_to_promote` | string \| null | ✅ | 见 3.6 | 配合品牌宣传意愿 |
+| `authorize_media` | string \| null | ✅ | 见 3.6 | 素材授权范围 |
+
 #### 附件与合规
 
 | 字段 | 类型 | 必填 | 约束 | 说明 |
@@ -397,6 +510,12 @@ GET /
 | `expected_qty` `price_min` `price_max` | INTEGER | 同名 |
 | `pct_secondhand` `pct_new_stock` `pct_sample` `pct_replica` | INTEGER | 由 `structure` 拆列 |
 | `items_json` | TEXT | `items` 序列化 |
+| `founded_year` | INTEGER | 同名 |
+| `social_links` | TEXT | JSON 字符串 |
+| `brand_intro` `brand_specialty` `past_experience` | TEXT | 同名 |
+| `channels` `planned_activities` | TEXT | JSON 字符串 |
+| `has_physical_store` `attended_other_events` | INTEGER | 布尔转 0/1，未填为 NULL |
+| `target_consumers` `willing_to_promote` `authorize_media` | TEXT | 同名 |
 | `consent_at` `privacy_version` | TEXT | 服务端生成 |
 | `source` | TEXT | 同名 |
 

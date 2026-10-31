@@ -125,6 +125,41 @@ def _exec(conn: Any, sql: str, args: tuple | list | None = None) -> tuple[int, i
 # ---------------------------------------------------------------- 初始化
 
 
+# v2 调研新增列：(sqlite 类型, mysql 类型)
+# 老库升级时自动 ALTER TABLE 补列，不用手工迁移
+_V2_COLUMNS: dict[str, tuple[str, str]] = {
+    "founded_year": ("INTEGER", "INT NULL"),
+    "social_links": ("TEXT DEFAULT '[]'", "VARCHAR(2000) NULL"),
+    "brand_intro": ("TEXT", "TEXT NULL"),
+    "channels": ("TEXT DEFAULT '[]'", "VARCHAR(200) NULL"),
+    "has_physical_store": ("INTEGER", "TINYINT(1) NULL"),
+    "attended_other_events": ("INTEGER", "TINYINT(1) NULL"),
+    "past_experience": ("TEXT", "TEXT NULL"),
+    "brand_specialty": ("TEXT", "TEXT NULL"),
+    "target_consumers": ("TEXT", "VARCHAR(30) NULL"),
+    "planned_activities": ("TEXT DEFAULT '[]'", "VARCHAR(300) NULL"),
+    "willing_to_promote": ("TEXT", "VARCHAR(30) NULL"),
+    "authorize_media": ("TEXT", "VARCHAR(30) NULL"),
+}
+
+
+def _ensure_columns(conn: Any, dialect: str) -> list[str]:
+    """返回本次新增的列名（空列表表示库已是最新）。"""
+    if dialect == "sqlite":
+        existing = {r["name"] for r in _rows(conn, "PRAGMA table_info(application)")}
+    else:
+        existing = {r.get("Field") for r in _rows(conn, "SHOW COLUMNS FROM application")}
+
+    added: list[str] = []
+    for name, (sqlite_type, mysql_type) in _V2_COLUMNS.items():
+        if name in existing:
+            continue
+        col_type = sqlite_type if dialect == "sqlite" else mysql_type
+        _exec(conn, f"ALTER TABLE application ADD COLUMN {name} {col_type}")
+        added.append(name)
+    return added
+
+
 def init_db() -> None:
     dialect, _ = target()
     schema = SCHEMA_DIR / ("schema_sqlite.sql" if dialect == "sqlite" else "schema_mysql.sql")
@@ -133,6 +168,7 @@ def init_db() -> None:
     with get_conn() as conn:
         if dialect == "sqlite":
             conn.executescript(sql)
+            _ensure_columns(conn, dialect)
             return
         for statement in [s.strip() for s in sql.split(";") if s.strip()]:
             if statement.startswith("--"):
@@ -142,6 +178,7 @@ def init_db() -> None:
                 ).strip()
             if statement:
                 _exec(conn, statement)
+        _ensure_columns(conn, dialect)
 
 
 def fetch_one(sql: str, args: tuple | list = ()) -> dict[str, Any] | None:

@@ -20,7 +20,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import db
+from . import db, survey
 from .config import settings
 from .errors import install_error_handlers
 from .models import ApplicationIn, SubmitResult, UploadResult
@@ -285,6 +285,21 @@ async def upload_attachment(
 # ---------------------------------------------------------------- 2. 提交报名
 
 
+@app.get(
+    "/api/v1/form-schema",
+    tags=["报名"],
+    summary="获取问卷结构（含新增调研题与文案）",
+    response_description="前端据此渲染表单，文案与选项以后端为准",
+)
+def form_schema() -> dict:
+    """返回完整的问卷结构：分组、题目、选项、必填标记、文案。
+
+    新增的「品牌背景与经营情况」12 道题、D 区、招募截止/回复时间文案
+    都在这里，前端不需要再硬编码。
+    """
+    return survey.schema()
+
+
 @app.post(
     "/api/v1/applications",
     response_model=SubmitResult,
@@ -364,6 +379,7 @@ else:
             "endpoints": {
                 "POST /api/v1/uploads": "上传附件，返回 file_id",
                 "POST /api/v1/applications": "提交报名（带 file_ids）",
+                "GET /api/v1/form-schema": "问卷结构（含新增调研题与文案）",
                 "GET /docs": "接口文档（Swagger UI）",
             },
         }
