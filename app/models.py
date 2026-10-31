@@ -173,23 +173,23 @@ class ApplicationIn(BaseModel):
         description="Instagram／小红书／抖音 链接，可多填",
     )
     brand_intro: str | None = Field(None, description="品牌简介（100–300 字）")
-    channels: list[Literal["online_store", "physical_store", "personal_social",
-                           "market_stall", "multi_channel"]] = Field(
-        default_factory=list, description="主要经营渠道，多选"
-    )
+    channels: list[
+        Literal[
+            "online_store", "physical_store", "personal_social", "market_stall", "multi_channel"
+        ]
+    ] = Field(default_factory=list, description="主要经营渠道，多选")
     has_physical_store: bool | None = Field(None, description="是否有实体店")
     attended_other_events: bool | None = Field(None, description="是否参加过其他市集或展会")
     past_experience: str | None = Field(None, max_length=1000, description="过往参展经历")
 
     # ---- 品牌定位与特色 ----
     brand_specialty: str | None = Field(None, description="品牌最有特色的地方（100–300 字）")
-    target_consumers: Literal["vintage", "street", "designer", "young", "collector", "other"] | None = Field(
-        None, description="主要面向的消费者，单选"
-    )
-    planned_activities: list[Literal["limited", "first_release", "discount", "collab",
-                                     "onsite", "pr_license", "none"]] = Field(
-        default_factory=list, description="本次特别商品或活动，多选"
-    )
+    target_consumers: (
+        Literal["vintage", "street", "designer", "young", "collector", "other"] | None
+    ) = Field(None, description="主要面向的消费者，单选")
+    planned_activities: list[
+        Literal["limited", "first_release", "discount", "collab", "onsite", "pr_license", "none"]
+    ] = Field(default_factory=list, description="本次特别商品或活动，多选")
 
     # ---- 品牌意愿与授权 ----
     willing_to_promote: Literal["provide_material", "need_talk"] | None = Field(

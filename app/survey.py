@@ -145,8 +145,7 @@ GROUPS: list[dict] = [
             {
                 "key": "authorize_media",
                 "label": (
-                    "是否同意主办方在活动宣传及回顾中使用品牌提供的照片、"
-                    "商品图片及品牌名称？"
+                    "是否同意主办方在活动宣传及回顾中使用品牌提供的照片、商品图片及品牌名称？"
                 ),
                 "type": "single",
                 "required": True,
@@ -172,4 +171,4 @@ def schema() -> dict:
     }
 
 
-__all__ = ["schema", "FEEDBACK_COPY", "ITEMS_HINT", "GROUPS"]
+__all__ = ["FEEDBACK_COPY", "GROUPS", "ITEMS_HINT", "schema"]
